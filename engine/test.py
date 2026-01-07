@@ -12,8 +12,11 @@ Demonstrates the complete pipeline:
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import json
 
 from engine.generator import SynthDataEngine
+from evaluation.statistics import evaluate_statistical_similarity
+from evaluation.adversarial import evaluate_adversarial_detectability
 
 
 def create_sample_data() -> pd.DataFrame:
@@ -143,6 +146,70 @@ def main():
                   f"(diff: {abs(orig_mean - synth_mean)/orig_mean*100:.1f}%)")
             print(f"  Std:    {orig_std:.2f} → {synth_std:.2f} "
                   f"(diff: {abs(orig_std - synth_std)/orig_std*100:.1f}%)")
+    
+    # Step 6: Production-grade evaluation
+    print("\n" + "="*60)
+    print("EVALUATION ENGINE - STATISTICAL SIMILARITY")
+    print("="*60)
+    
+    eval_stats = evaluate_statistical_similarity(df_original, df_synthetic, schema)
+    
+    print("\n📊 KS Test (Numeric Distributions):")
+    for col, results in eval_stats["ks_test"].items():
+        p_val = results["p_value"]
+        stat = results["statistic"]
+        status = "✓ PASS" if p_val > 0.05 else "✗ FAIL"
+        print(f"  {col:20s} | KS-stat: {stat:.4f} | p-value: {p_val:.4f} | {status}")
+    
+    print("\n📊 Chi-Square Test (Categorical Distributions):")
+    for col, results in eval_stats["chi_square"].items():
+        p_val = results["p_value"]
+        stat = results["statistic"]
+        status = "✓ PASS" if p_val > 0.05 else "✗ FAIL"
+        print(f"  {col:20s} | Chi2:   {stat:.4f} | p-value: {p_val:.4f} | {status}")
+    
+    print("\n📊 Correlation Preservation (MSE):")
+    corr_mse = eval_stats["correlation_mse"]
+    print(f"  Correlation MSE: {corr_mse:.6f}")
+    if corr_mse < 0.05:
+        print("  ✓ PASS (relationships well-preserved)")
+    else:
+        print("  ✗ FAIL (relationships may be distorted)")
+    
+    # Step 7: Adversarial detectability
+    print("\n" + "="*60)
+    print("EVALUATION ENGINE - ADVERSARIAL DETECTABILITY")
+    print("="*60)
+    
+    auc = evaluate_adversarial_detectability(df_original, df_synthetic, schema)
+    print(f"\n🎯 Binary Classification AUC: {auc:.4f}")
+    if 0.45 <= auc <= 0.55:
+        print("  ✓ EXCELLENT - Synthetic indistinguishable from real")
+    elif 0.40 <= auc < 0.45 or 0.55 < auc <= 0.60:
+        print("  ✓ GOOD - Limited distinguishability")
+    else:
+        print("  ✗ WARNING - Model easily distinguishes real vs synthetic")
+    
+    # Step 8: Full evaluation report
+    print("\n" + "="*60)
+    print("COMPLETE EVALUATION REPORT")
+    print("="*60)
+    
+    full_report = {
+        "ks_test": eval_stats["ks_test"],
+        "chi_square": eval_stats["chi_square"],
+        "correlation_mse": eval_stats["correlation_mse"],
+        "adversarial_auc": auc
+    }
+    
+    report_path = Path("data/evaluation_report.json")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(report_path, "w") as f:
+        json.dump(full_report, f, indent=2)
+    
+    print(f"✓ Evaluation report saved to {report_path}")
+    print("\nFull Report (JSON):")
+    print(json.dumps(full_report, indent=2))
     
     print("\n" + "="*60)
     print("TEST COMPLETE")
