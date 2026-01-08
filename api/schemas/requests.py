@@ -5,11 +5,57 @@ Pydantic models for API request validation and response serialization.
 All schemas are JSON-serializable for React Native / Expo compatibility.
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Literal, Union
 from pydantic import BaseModel, Field, validator
 
 
 # ========== GENERATION ENDPOINTS ==========
+
+
+class SchemaColumnDefinition(BaseModel):
+    """Declarative column schema for Mode B (schema-only generation)."""
+
+    name: str = Field(..., description="Column name")
+    type: Literal["int", "float", "categorical", "identifier"] = Field(
+        ..., description="Column data type"
+    )
+    min: Optional[float] = Field(None, description="Minimum value for numeric types")
+    max: Optional[float] = Field(None, description="Maximum value for numeric types")
+    values: Optional[List[str]] = Field(None, description="Allowed values for categorical columns")
+    start: Optional[int] = Field(1, description="Starting value for identifier columns (sequential)")
+    null_rate: float = Field(0.0, ge=0, le=1, description="Fraction of nulls to insert (0-1)")
+
+    @validator("values", always=True)
+    def require_values_for_categorical(cls, v, values):
+        if values.get("type") == "categorical" and not v:
+            raise ValueError("categorical columns require a non-empty values list")
+        return v
+
+    @validator("min", "max")
+    def require_min_max_for_numeric(cls, v, values):
+        if values.get("type") in {"int", "float"} and v is None:
+            raise ValueError("numeric columns require min and max")
+        return v
+
+
+class SchemaDefinition(BaseModel):
+    """Top-level schema wrapper for Mode B generation."""
+
+    columns: List[SchemaColumnDefinition] = Field(..., description="List of column definitions")
+    seed: int = Field(42, description="Deterministic seed for schema sampling")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "seed": 42,
+                "columns": [
+                    {"name": "id", "type": "identifier", "start": 1},
+                    {"name": "age", "type": "int", "min": 18, "max": 90},
+                    {"name": "income", "type": "float", "min": 20000, "max": 250000},
+                    {"name": "gender", "type": "categorical", "values": ["M", "F"]}
+                ]
+            }
+        }
 
 class GenerateRequest(BaseModel):
     """
@@ -25,6 +71,11 @@ class GenerateRequest(BaseModel):
     file_path: Optional[str] = Field(
         None,
         description="Path to CSV file on server (alternative to file upload)"
+    )
+
+    schema: Optional[SchemaDefinition] = Field(
+        None,
+        description="Schema-only generation payload (Mode B, no real data required)"
     )
     
     n_rows: int = Field(
@@ -123,6 +174,11 @@ class EvaluateRequest(BaseModel):
         None,
         description="Dataset ID from previous /generate call (alternative to synthetic_file_path)"
     )
+
+    schema: Optional[SchemaDefinition] = Field(
+        None,
+        description="Schema definition for schema-only evaluation (Mode B)"
+    )
     
     @validator('dataset_id', 'synthetic_file_path')
     def check_synthetic_source(cls, v, values):
@@ -208,6 +264,31 @@ class EvaluateResponse(BaseModel):
                     "correlation_mse": "PASS - Relationships well-preserved",
                     "adversarial_auc": "EXCELLENT - Synthetic indistinguishable from real"
                 }
+            }
+        }
+
+
+class SchemaEvaluateResponse(BaseModel):
+    """Schema-only evaluation response (Mode B)."""
+
+    schema_validity: Literal["PASS", "FAIL"] = Field(..., description="Overall schema validity status")
+    type_consistency: str = Field(..., description="Summary of type checks")
+    range_violations: int = Field(..., description="Count of out-of-range numeric values")
+    category_violations: int = Field(..., description="Count of invalid categorical values")
+    null_rate: Dict[str, float] = Field(..., description="Observed null rate per column")
+    identifier_issues: Optional[str] = Field(None, description="Identifier uniqueness/sequential issues if any")
+    message: str = Field(..., description="Status message")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "schema_validity": "PASS",
+                "type_consistency": "All columns match declared types",
+                "range_violations": 0,
+                "category_violations": 0,
+                "null_rate": {"age": 0.0, "income": 0.0, "gender": 0.0},
+                "identifier_issues": None,
+                "message": "Schema-only evaluation completed"
             }
         }
 

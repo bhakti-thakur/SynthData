@@ -6,8 +6,9 @@ Calls the existing evaluation engine without modifying core logic.
 """
 
 import sys
+import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
@@ -20,9 +21,16 @@ from engine.generator import SynthDataEngine
 from schema.infer import infer_schema
 from evaluation.statistics import evaluate_statistical_similarity
 from evaluation.adversarial import evaluate_adversarial_detectability
+from evaluation.schema_consistency import evaluate_schema_consistency
 
 from config import config
-from schemas.requests import EvaluateResponse, KSTestResult, ChiSquareResult
+from schemas.requests import (
+    EvaluateResponse,
+    SchemaEvaluateResponse,
+    KSTestResult,
+    ChiSquareResult,
+    SchemaDefinition,
+)
 
 
 router = APIRouter(prefix="/evaluate", tags=["Evaluation"])
@@ -30,7 +38,7 @@ router = APIRouter(prefix="/evaluate", tags=["Evaluation"])
 
 @router.post(
     "",
-    response_model=EvaluateResponse,
+    response_model=Union[EvaluateResponse, SchemaEvaluateResponse],
     status_code=status.HTTP_200_OK,
     summary="Evaluate Synthetic Data Quality",
     description="""
@@ -45,6 +53,7 @@ router = APIRouter(prefix="/evaluate", tags=["Evaluation"])
     - Upload both real and synthetic CSVs
     - Provide file paths on server
     - Use dataset_id from previous /generate call (for synthetic data)
+    - Provide only schema + synthetic data to run schema consistency checks (Mode B)
     """
 )
 async def evaluate_synthetic_data(
@@ -52,8 +61,9 @@ async def evaluate_synthetic_data(
     synthetic_file: Optional[UploadFile] = File(None, description="Synthetic CSV file"),
     real_file_path: Optional[str] = Form(None, description="Path to real CSV"),
     synthetic_file_path: Optional[str] = Form(None, description="Path to synthetic CSV"),
-    dataset_id: Optional[str] = Form(None, description="Dataset ID from /generate")
-) -> EvaluateResponse:
+    dataset_id: Optional[str] = Form(None, description="Dataset ID from /generate"),
+    schema: Optional[str] = Form(None, description="JSON schema for schema-only evaluation (Mode B)")
+) -> Union[EvaluateResponse, SchemaEvaluateResponse]:
     """
     Evaluate synthetic data quality.
     
@@ -66,9 +76,32 @@ async def evaluate_synthetic_data(
     6. Return JSON report
     """
     
-    # ========== STEP 1: LOAD REAL DATA ==========
-    
+    # ========== STEP 0: OPTIONAL SCHEMA PARSING (MODE B) ==========
+    schema_definition: Optional[SchemaDefinition] = None
+    if schema:
+        try:
+            schema_dict = json.loads(schema)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid schema JSON: {str(e)}"
+            )
+        try:
+            schema_definition = SchemaDefinition.parse_obj(schema_dict)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Schema validation failed: {str(e)}"
+            )
+
     df_real: Optional[pd.DataFrame] = None
+    
+    # ========== STEP 1: LOAD REAL DATA (MODE A ONLY) ==========
+    if schema_definition and (real_file is not None or real_file_path is not None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Schema evaluation is schema-only; omit real data inputs"
+        )
     
     if real_file is not None:
         # Option A: Upload
@@ -123,7 +156,7 @@ async def evaluate_synthetic_data(
                 detail=f"Error reading real file: {str(e)}"
             )
     
-    else:
+    elif schema_definition is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Must provide 'real_file' upload or 'real_file_path'"
@@ -203,6 +236,24 @@ async def evaluate_synthetic_data(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Must provide 'synthetic_file', 'synthetic_file_path', or 'dataset_id'"
         )
+
+    # ========== MODE B: SCHEMA-ONLY EVALUATION ==========
+    if df_real is None:
+        if schema_definition is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Schema definition required when no real data is provided"
+            )
+
+        try:
+            schema_result = evaluate_schema_consistency(df_synthetic, schema_definition.dict())
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error running schema evaluation: {str(e)}"
+            )
+
+        return SchemaEvaluateResponse(**schema_result)
     
     # ========== STEP 3: INFER SCHEMA ==========
     

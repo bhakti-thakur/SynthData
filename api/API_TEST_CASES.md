@@ -70,7 +70,49 @@ Base URL: `http://localhost:8000`
   "download_url": "/generate/download/synth_20260108_143052_a1b2c3",
   "generation_params": {
     "epochs": 100,
-    "batch_size": 50,
+    "batch_size": 100,
+    "apply_constraints": true
+  }
+}
+```
+
+---
+
+## TEST 3B: Generate Synthetic Data (Schema-Only, Mode B)
+
+**Endpoint:** `POST /generate`
+
+**Headers:** 
+- Content-Type: `multipart/form-data`
+
+**Body (Form-Data):**
+- `schema`: JSON text (example below)
+- `n_rows`: `50` (number)
+
+**Schema Example (paste as text):**
+```json
+{
+  "seed": 42,
+  "columns": [
+    {"name": "id", "type": "identifier", "start": 1},
+    {"name": "age", "type": "int", "min": 18, "max": 90},
+    {"name": "income", "type": "float", "min": 30000, "max": 120000},
+    {"name": "gender", "type": "categorical", "values": ["M", "F"]}
+  ]
+}
+```
+
+**Expected Response (201 Created):**
+```json
+{
+  "message": "Synthetic data generated successfully",
+  "dataset_id": "schema_20260108_143500_abcd12",
+  "rows_generated": 50,
+  "columns": ["id", "age", "income", "gender"],
+  "download_url": "/generate/download/schema_20260108_143500_abcd12",
+  "generation_params": {
+    "epochs": 300,
+    "batch_size": 500,
     "apply_constraints": true
   }
 }
@@ -257,6 +299,37 @@ Base URL: `http://localhost:8000`
     "correlation_mse": "Correlation MSE: 0.0023 - Excellent preservation (< 0.01)",
     "adversarial_auc": "Adversarial AUC: 0.5234 - Excellent quality (near 0.5 = hard to distinguish)"
   }
+}
+```
+
+---
+
+## TEST 10B: Evaluate - Schema-Only (Mode B)
+
+**Endpoint:** `POST /evaluate`
+
+**Headers:** 
+- Content-Type: `multipart/form-data`
+
+**Body (Form-Data):**
+- `schema`: (JSON text, same as TEST 3B schema example)
+- `dataset_id`: Use the ID returned from TEST 3B
+
+**Expected Response (200 OK):**
+```json
+{
+  "schema_validity": "PASS",
+  "type_consistency": "All columns match declared types",
+  "range_violations": 0,
+  "category_violations": 0,
+  "null_rate": {
+    "id": 0.0,
+    "age": 0.0,
+    "income": 0.0,
+    "gender": 0.0
+  },
+  "identifier_issues": null,
+  "message": "Schema-only evaluation completed"
 }
 ```
 

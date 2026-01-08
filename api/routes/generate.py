@@ -7,6 +7,7 @@ Calls the existing engine without modifying core logic.
 
 import sys
 import uuid
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -19,9 +20,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "engine"))
 
 # Import from existing engine (READ-ONLY)
 from engine.generator import SynthDataEngine
+from schema_generator.generator import SchemaDataGenerator
 
 from config import config
-from schemas.requests import GenerateResponse
+from schemas.requests import GenerateResponse, SchemaDefinition
 
 
 router = APIRouter(prefix="/generate", tags=["Generation"])
@@ -38,6 +40,7 @@ router = APIRouter(prefix="/generate", tags=["Generation"])
     **Input Options:**
     1. Upload a CSV file (multipart/form-data)
     2. Provide a file path on the server
+    3. Provide a JSON schema for schema-only generation (no real data)
     
     **Process:**
     - Load training data
@@ -53,6 +56,7 @@ router = APIRouter(prefix="/generate", tags=["Generation"])
 async def generate_synthetic_data(
     file: Optional[UploadFile] = File(None, description="CSV file to upload"),
     file_path: Optional[str] = Form(None, description="Path to CSV on server"),
+    schema: Optional[str] = Form(None, description="JSON schema for schema-only generation (Mode B)"),
     n_rows: int = Form(1000, ge=1, le=100000, description="Rows to generate"),
     epochs: int = Form(300, ge=50, le=1000, description="Training epochs"),
     batch_size: int = Form(500, ge=100, le=2000, description="Batch size"),
@@ -71,110 +75,146 @@ async def generate_synthetic_data(
     6. Return metadata (dataset_id, download URL, etc.)
     """
     
-    # ========== STEP 1: LOAD INPUT DATA ==========
-    
-    df_real: Optional[pd.DataFrame] = None
-    
-    if file is not None:
-        # Option A: File upload
-        if not config.validate_file_extension(file.filename):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
-            )
-        
-        # Save uploaded file temporarily
-        upload_path = config.get_upload_path(file.filename)
-        
+    # ========== STEP 0: PARSE OPTIONAL SCHEMA (MODE B) ==========
+    schema_definition: Optional[SchemaDefinition] = None
+    if schema:
         try:
-            contents = await file.read()
-            
-            # Check file size
-            if len(contents) > config.MAX_UPLOAD_SIZE_BYTES:
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=f"File too large. Max size: {config.MAX_UPLOAD_SIZE_MB}MB"
-                )
-            
-            with open(upload_path, "wb") as f:
-                f.write(contents)
-            
-            df_real = pd.read_csv(upload_path)
-            
-        except pd.errors.ParserError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid CSV format: {str(e)}"
-            )
+            schema_dict = json.loads(schema)
         except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error reading file: {str(e)}"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid schema JSON: {str(e)}"
             )
-    
-    elif file_path is not None:
-        # Option B: File path on server
-        path = Path(file_path)
-        
-        if not path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"File not found: {file_path}"
-            )
-        
         try:
-            df_real = pd.read_csv(path)
+            schema_definition = SchemaDefinition.parse_obj(schema_dict)
         except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error reading file: {str(e)}"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Schema validation failed: {str(e)}"
             )
-    
-    else:
-        # Neither file nor path provided
+
+    # Prevent mixing modes to keep Mode A behavior untouched.
+    if schema_definition and (file is not None or file_path is not None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Must provide either 'file' upload or 'file_path'"
+            detail="Provide either schema or file/file_path, not both"
         )
+
+    df_real: Optional[pd.DataFrame] = None
+    df_synthetic: Optional[pd.DataFrame] = None
+
+    # ========== MODE A: DATA-DRIVEN (UNCHANGED) ==========
+    if schema_definition is None:
+        # Step 1: Load input data
+        if file is not None:
+            if not config.validate_file_extension(file.filename):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
+                )
+
+            upload_path = config.get_upload_path(file.filename)
+
+            try:
+                contents = await file.read()
+
+                if len(contents) > config.MAX_UPLOAD_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File too large. Max size: {config.MAX_UPLOAD_SIZE_MB}MB"
+                    )
+
+                with open(upload_path, "wb") as f:
+                    f.write(contents)
+
+                df_real = pd.read_csv(upload_path)
+
+            except pd.errors.ParserError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid CSV format: {str(e)}"
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error reading file: {str(e)}"
+                )
+
+        elif file_path is not None:
+            path = Path(file_path)
+
+            if not path.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"File not found: {file_path}"
+                )
+
+            try:
+                df_real = pd.read_csv(path)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error reading file: {str(e)}"
+                )
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Must provide either 'file' upload or 'file_path'"
+            )
+
+        # Step 2: Initialize engine (CTGAN)
+        try:
+            engine = SynthDataEngine(
+                epochs=epochs,
+                batch_size=batch_size,
+                categorical_threshold=categorical_threshold,
+                verbose=True  # keep logging for Mode A
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error initializing engine: {str(e)}"
+            )
+
+        # Step 3: Fit engine on training data
+        try:
+            engine.fit(df_real)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error training model: {str(e)}"
+            )
+
+        # Step 4: Generate synthetic data
+        try:
+            df_synthetic = engine.generate(
+                n_rows=n_rows,
+                apply_constraints=apply_constraints
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error generating synthetic data: {str(e)}"
+            )
+
+    # ========== MODE B: SCHEMA-ONLY GENERATION ==========
+    else:
+        try:
+            generator = SchemaDataGenerator(seed=schema_definition.seed)
+            df_synthetic = generator.generate(schema_definition.dict(), n_rows=n_rows)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Schema generation failed: {str(e)}"
+            )
     
-    # ========== STEP 2: INITIALIZE ENGINE ==========
-    
-    try:
-        engine = SynthDataEngine(
-            epochs=epochs,
-            batch_size=batch_size,
-            categorical_threshold=categorical_threshold,
-            verbose=True  # Enable logging for monitoring
-        )
-    except Exception as e:
+    if df_synthetic is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error initializing engine: {str(e)}"
+            detail="Synthetic data generation did not produce any output"
         )
-    
-    # ========== STEP 3: FIT ENGINE ON TRAINING DATA ==========
-    
-    try:
-        schema = engine.fit(df_real)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error training model: {str(e)}"
-        )
-    
-    # ========== STEP 4: GENERATE SYNTHETIC DATA ==========
-    
-    try:
-        df_synthetic = engine.generate(
-            n_rows=n_rows,
-            apply_constraints=apply_constraints
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating synthetic data: {str(e)}"
-        )
-    
+
     # ========== STEP 5: SAVE OUTPUT ==========
     
     # Generate unique dataset ID
