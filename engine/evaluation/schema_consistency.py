@@ -12,6 +12,42 @@ import pandas as pd
 from schema_generator.generator import SUPPORTED_TYPES
 
 
+def _validate_identifier(series: pd.Series, start: int = 1):
+    """Property-based identifier validation (dtype-agnostic).
+
+    Conditions (order-invariant):
+    1) No nulls
+    2) All values are integer-coercible
+    3) All values are unique
+    4) min == start
+    5) max == start + n - 1 (continuous range)
+    """
+
+    if series.isna().any():
+        return False, "Identifier contains null values"
+
+    try:
+        s_int = series.astype("int64")
+    except Exception:
+        return False, "Identifier contains non-integer values"
+
+    n = len(s_int)
+
+    if s_int.nunique() != n:
+        return False, "Identifier contains duplicate values"
+
+    min_v = int(s_int.min())
+    max_v = int(s_int.max())
+
+    if min_v != start:
+        return False, f"Identifier does not start from {start}"
+
+    if max_v != start + n - 1:
+        return False, "Identifier is not continuous"
+
+    return True, None
+
+
 def evaluate_schema_consistency(df: pd.DataFrame, schema: Dict) -> Dict:
     """Validate a synthetic dataset against the provided schema.
 
@@ -64,9 +100,9 @@ def evaluate_schema_consistency(df: pd.DataFrame, schema: Dict) -> Dict:
 
         elif col_type == "identifier":
             start = int(col.get("start", 1))
-            expected = pd.Series(range(start, start + len(series)), dtype="Int64")
-            if not series.equals(expected):
-                identifier_issues = f"Identifier {name} not sequential from {start}"
+            valid, msg = _validate_identifier(series, start=start)
+            if not valid:
+                identifier_issues = msg
 
     schema_validity = "PASS" if not type_issues and range_violations == 0 and category_violations == 0 and not identifier_issues else "FAIL"
 
