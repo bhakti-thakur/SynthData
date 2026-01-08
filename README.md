@@ -1,7 +1,7 @@
 
 # SynthData.ai Engine
 
-**Create realistic fake data from real data — safely, automatically, and at scale.**
+**Create realistic fake data from real data: safely, automatically, and at scale.**
 
 SynthData.ai Engine helps you generate **high-quality synthetic (fake) tabular data** that looks and behaves like real data, without exposing sensitive information.
 
@@ -11,7 +11,7 @@ Think of it as:
 
 ---
 
-## What this engine does (in plain English)
+## What this engine does
 
 * 🔍 **Understands your data automatically**
 
@@ -69,7 +69,7 @@ No manual configuration. No schema writing. No babysitting.
 * Uses **modern generative AI (GANs)** designed specifically for tabular data
 * Handles **mixed data** (numbers + categories) naturally
 * Keeps results **statistically consistent**, not just visually similar
-* Designed to be extended (APIs, new models, evaluation later)
+* Designed to be extended (APIs, new models, evaluation, LLM copulation)
 
 ---
 
@@ -95,7 +95,7 @@ No manual configuration. No schema writing. No babysitting.
 
 If you need **realistic data without real risk**, this engine does the heavy lifting for you.
 
-You focus on **building and testing** — it handles **learning and generating**.
+You focus on **building and testing**,it handles **learning and generating**.
 
 ---
 

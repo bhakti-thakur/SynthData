@@ -1,6 +1,6 @@
 # Evaluation Engine
 
-Production-grade evaluation framework for synthetic tabular data quality assessment.
+Evaluation framework for synthetic tabular data quality assessment.
 
 ## Overview
 
@@ -12,11 +12,11 @@ The Evaluation Engine provides quantitative, research-backed metrics to compare 
 
 ## Key Features
 
-- ✓ **Identifier-aware**: Automatically excludes ID columns from evaluation
-- ✓ **Type-aware**: Handles numeric, categorical, and mixed-type data
-- ✓ **Robust**: Handles missing values, edge cases, and zero-count categories
-- ✓ **Production-ready**: No hyperparameter tuning required
-- ✓ **Interpretable**: All metrics have clear, actionable interpretations
+- **Identifier-aware**: Automatically excludes ID columns from evaluation
+- **Type-aware**: Handles numeric, categorical, and mixed-type data
+- **Robust**: Handles missing values, edge cases, and zero-count categories
+- **Production-ready**: No hyperparameter tuning required
+- **Interpretable**: All metrics have clear, actionable interpretations
 
 ## Metrics
 
@@ -151,31 +151,6 @@ else:
 
 ## Usage
 
-### Basic Evaluation
-
-```python
-from engine.generator import SynthDataEngine
-from evaluation.statistics import evaluate_statistical_similarity
-from evaluation.adversarial import evaluate_adversarial_detectability
-
-# Load data and generate synthetic data
-engine = SynthDataEngine()
-schema = engine.fit(df_real)
-df_synthetic = engine.generate(n_rows=1000)
-
-# Run evaluation
-eval_stats = evaluate_statistical_similarity(df_real, df_synthetic, schema)
-auc = evaluate_adversarial_detectability(df_real, df_synthetic, schema)
-
-# Full report
-report = {
-    "ks_test": eval_stats["ks_test"],
-    "chi_square": eval_stats["chi_square"],
-    "correlation_mse": eval_stats["correlation_mse"],
-    "adversarial_auc": auc
-}
-```
-
 ### Interpreting Full Report
 
 ```python
@@ -260,81 +235,31 @@ evaluation/
 
 ## Common Questions
 
-**Q: Which metric is most important?**
+**Q: Which metric is most important?**␠␠
 A: Adversarial AUC is most holistic (captures if ANY difference exists), but use all three together for complete picture.
 
-**Q: What if some tests pass and some fail?**
+**Q: What if some tests pass and some fail?**␠␠
 A: Check which specific columns fail. May indicate CTGAN needs more training, or domain constraints are missing.
 
-**Q: Can I get false positives/negatives?**
+**Q: Can I get false positives/negatives?**␠␠
 A: Yes. High p-values can occur by chance (use multiple tests). Recommend checking all 4 metrics together.
 
-**Q: How many samples do I need?**
+**Q: How many samples do I need?**␠␠
 A: Larger samples (>1000) give more stable results. Minimum 100-200 for reasonable estimates.
 
-**Q: Can I modify the RandomForest parameters?**
+**Q: Can I modify the RandomForest parameters?**␠␠
 A: Yes, use `evaluate_adversarial_detectability(..., n_estimators=200, random_state=123)`
 
-## References
+<!-- ## References
 
 - Kolmogorov–Smirnov test: Non-parametric test for continuous distributions
 - Chi-square test: Goodness-of-fit test for categorical distributions
 - Correlation analysis: Pearson correlation for linear relationships
 - Adversarial testing: Standard method in privacy/synthetic data literature
-  - Reference: "Synthetic Data Generation – Methodology and Applications", NeurIPS 2021
+  - Reference: "Synthetic Data Generation – Methodology and Applications", NeurIPS 2021 -->
 
 ---
 
 **Status**: Production-ready | **Version**: 1.0 | **Maintained**: Active
 ---
 
-## 4️⃣ What enhancements are POSSIBLE (not mandatory)
-
-### 🔴 Do NOT rush these unless needed
-
-Your system is **complete** for BE + MVP.
-Enhancements below are **v2 / future work**, not fixes.
-
----
-
-### 🔹 Enhancement 1: Conditional CTGAN sampling
-
-* Condition on categorical columns
-* Reduces chi-square failures
-* Improves AUC
-
-**Status:** Optional
-
----
-
-### 🔹 Enhancement 2: Category rebalancing post-process
-
-* Match marginal frequencies explicitly
-* Improves chi-square
-* Risk: hurts correlations
-
-**Status:** Research trade-off
-
----
-
-### 🔹 Enhancement 3: Quality score aggregation
-
-Create a single score like:
-
-```
-Quality = w1*(1-KS) + w2*(1-Chi2) + w3*(1-AUC) + w4*(1-CorrMSE)
-```
-
-This is **great for demos**, not required.
-
----
-
-## 7️⃣ What to say if examiner asks “Why are some tests failing?”
-
-You answer:
-
-> “Synthetic data generation involves trade-offs. While marginal distributions may show minor statistical deviations detected by sensitive tests like KS and chi-square, higher-level properties such as correlation structure and downstream indistinguishability remain well preserved. Therefore, evaluation must be multi-dimensional rather than relying on a single test.”
-
-That is a **10/10 answer**.
-
----

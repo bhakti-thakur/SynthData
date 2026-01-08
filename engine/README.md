@@ -42,10 +42,10 @@ synthdata-engine/
 
 1. **Clone or navigate to the project directory:**
    ```bash
-   cd c:\Users\tbhak\OneDrive\Desktop\SynthData\engine
+   cd \SynthData\engine
    ```
 
-2. **Create a virtual environment (recommended):**
+2. **Create a virtual environment (Optional; Recommended):**
    ```bash
    python -m venv venv
    venv\Scripts\activate  # Windows
@@ -57,32 +57,6 @@ synthdata-engine/
    ```
 
 ## Quick Start
-
-### Basic Usage
-
-```python
-import pandas as pd
-from engine.generator import SynthDataEngine
-
-# Load your data
-df = pd.read_csv("your_data.csv")
-
-# Initialize engine
-engine = SynthDataEngine(
-    epochs=300,           # More epochs = better quality
-    batch_size=500,
-    verbose=True
-)
-
-# Fit on your data
-schema = engine.fit(df)
-
-# Generate synthetic data
-synthetic_df = engine.generate(n_rows=1000)
-
-# Save output
-synthetic_df.to_csv("synthetic_data.csv", index=False)
-```
 
 ### Run the Test Script
 
@@ -211,7 +185,7 @@ CTGAN (Conditional Tabular GAN) from the Synthetic Data Vault (SDV) project is t
 3. Supports categorical columns with many categories
 4. Backed by research and production use
 
-Reference: [CTGAN Paper (NeurIPS 2019)](https://arxiv.org/abs/1907.00503)
+<!-- Reference: [CTGAN Paper (NeurIPS 2019)](https://arxiv.org/abs/1907.00503) -->
 
 ### Design Principles
 
@@ -220,31 +194,6 @@ Reference: [CTGAN Paper (NeurIPS 2019)](https://arxiv.org/abs/1907.00503)
 3. **Type Safety**: Python type hints throughout
 4. **Production-Ready**: No notebooks, clean .py modules
 5. **API-First**: Built to be wrapped by FastAPI/Flask
-
-## Troubleshooting
-
-### Import Errors
-
-If you see `ModuleNotFoundError`, make sure you're running from the project root:
-```bash
-cd c:\Users\tbhak\OneDrive\Desktop\SynthData\engine
-python test.py
-```
-
-### CTGAN Installation Issues
-
-CTGAN requires PyTorch. If installation fails:
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install ctgan
-```
-
-### Memory Issues
-
-For large datasets (>100K rows):
-- Reduce `batch_size` to 256 or 128
-- Generate in smaller batches
-- Use a machine with more RAM
 
 ## License
 
@@ -256,4 +205,4 @@ For questions or issues, contact the development team.
 
 ---
 
-**Built with ❤️ for production-grade synthetic data generation**
+**Built with ❤️ for synthetic data generation**

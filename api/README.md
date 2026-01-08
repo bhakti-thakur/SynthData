@@ -1,6 +1,6 @@
 # SynthData FastAPI Backend
 
-Production-grade REST API for synthetic tabular data generation and evaluation.
+Production-ready REST API for synthetic tabular data generation and evaluation.
 
 ## 🎯 Overview
 
@@ -15,11 +15,11 @@ This FastAPI backend provides a thin orchestration layer over the existing `engi
 
 ### Key Design Principles
 
-✅ **Separation of Concerns** - API layer only handles HTTP; ML logic stays in engine  
-✅ **Non-Breaking** - Zero modifications to engine/ directory  
-✅ **Frontend-Friendly** - JSON-first, CORS-enabled for React Native/Expo  
-✅ **Testable** - Full Swagger UI at `/docs`  
-✅ **Production-Ready** - Error handling, validation, file size limits  
+- **Separation of Concerns** - API layer only handles HTTP; ML logic stays in engine  
+- **Non-Breaking** - Zero modifications to engine/ directory  
+- **Frontend-Friendly** - JSON-first, CORS-enabled for React Native/Expo  
+- **Testable** - Full Swagger UI at `/docs`  
+- **Production-Ready** - Error handling, validation, file size limits  
 
 ---
 
@@ -47,6 +47,41 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 Open: **http://localhost:8000/docs**
 
 You'll see Swagger UI with interactive API documentation.
+
+---
+
+## 📊 Data-Driven Mode (Mode A)
+
+Use when you have real training data. Generation uses CTGAN (deep learning GAN).
+
+- **Generate:** POST `/generate` with `file` (upload) or `file_path` (server path) + training parameters (`epochs`, `batch_size`, etc.)
+- **Evaluate:** POST `/evaluate` with `real_file` and either `synthetic_file` or `dataset_id`. Returns 4 metrics: KS test, Chi-square, Correlation MSE, Adversarial AUC.
+
+### Example Request (File Upload)
+
+**Endpoint:** `POST /generate`
+
+**Body (multipart/form-data):**
+```
+file: <upload your CSV>
+n_rows: 100
+epochs: 300
+batch_size: 500
+apply_constraints: true
+```
+
+**Expected Response:**
+```json
+{
+  "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
+  "rows_generated": 100,
+  "columns": ["age", "income", "gender", "region"],
+  "download_url": "/generate/download/550e8400-e29b-41d4-a716-446655440000",
+  "message": "Synthetic data generated successfully"
+}
+```
+
+**Tip:** Training takes 30-120 seconds depending on data size and epochs. Use the `download_url` to retrieve the CSV.
 
 ---
 
