@@ -57,13 +57,14 @@ class SchemaDataGenerator:
 
         df = pd.DataFrame(data)
 
+        #trying to debug schema invalidtion issues due to identifier type checking!!!!!!
         # Ensure conventional sequential 'id' if present.
         # WHY: Many downstream validators expect an auto-incrementing identifier.
         # This keeps Mode B deterministic and avoids spurious schema failures.
-        if "id" in df.columns:
-            df["id"] = pd.Series(range(1, n_rows + 1), dtype="Int64")
+        # if "id" in df.columns:
+        #     df["id"] = pd.Series(range(1, n_rows + 1), dtype="Int64")
 
-        return df
+        # return df
 
     def _generate_column(self, col_def: Dict[str, Any], n_rows: int) -> pd.Series:
         col_type = col_def["type"]
