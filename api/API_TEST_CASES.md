@@ -1,4 +1,4 @@
-# SynthData API Test Cases for Hoppscotch
+# SynthData API Test Cases for Testing API
 
 Base URL: `http://localhost:8000`
 
