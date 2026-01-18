@@ -215,8 +215,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   configCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: '#FFF8F0',    
     padding: 20,
     marginHorizontal: 20,
     marginBottom: 24,

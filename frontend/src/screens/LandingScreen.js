@@ -143,7 +143,7 @@ export default function LandingScreen({ goToLogin, goToGenerate, goToEvaluate, g
                         Privacy-Preserving Synthetic Data Generation using Generative AI
                     </Text>
                     <Text style={styles.subtitle}>
-                        A hybrid Generative AI framework leveraging GANs, VAEs, and {"\n"} CTOANS to generate high- {"\n"}fidelity synthetic datasets for {"\n"} sensitive domains.
+                        A hybrid Generative AI framework leveraging GANs, VAEs, and {"\n"} CTGANS to generate high- {"\n"}fidelity synthetic datasets for {"\n"} sensitive domains.
                     </Text>
 
                     <View style={styles.bulletPoints}>
