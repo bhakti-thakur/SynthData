@@ -12,8 +12,8 @@ from typing import Optional
 import pandas as pd
 import numpy as np
 
-from schema.infer import Schema, ColumnInfo, infer_schema
-from models.ctgan import CTGANGenerator
+from engine.schema.infer import Schema, ColumnInfo, infer_schema
+from engine.models.ctgan import CTGANGenerator
 
 
 class SynthDataEngine:
