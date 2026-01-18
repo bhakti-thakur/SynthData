@@ -45,7 +45,7 @@ class SchemaDefinition(BaseModel):
     seed: int = Field(42, description="Deterministic seed for schema sampling")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "seed": 42,
                 "columns": [
@@ -73,7 +73,7 @@ class GenerateRequest(BaseModel):
         description="Path to CSV file on server (alternative to file upload)"
     )
 
-    schema: Optional[SchemaDefinition] = Field(
+    data_schema: Optional[SchemaDefinition] = Field(
         None,
         description="Schema-only generation payload (Mode B, no real data required)"
     )
@@ -112,7 +112,7 @@ class GenerateRequest(BaseModel):
     )
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "n_rows": 1000,
                 "epochs": 300,
@@ -137,7 +137,7 @@ class GenerateResponse(BaseModel):
     message: str = Field(..., description="Status message")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
                 "rows_generated": 1000,
@@ -175,7 +175,7 @@ class EvaluateRequest(BaseModel):
         description="Dataset ID from previous /generate call (alternative to synthetic_file_path)"
     )
 
-    schema: Optional[SchemaDefinition] = Field(
+    data_schema: Optional[SchemaDefinition] = Field(
         None,
         description="Schema definition for schema-only evaluation (Mode B)"
     )
@@ -187,7 +187,7 @@ class EvaluateRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "real_file_path": "data/uploads/real_data.csv",
                 "dataset_id": "550e8400-e29b-41d4-a716-446655440000"
@@ -246,7 +246,7 @@ class EvaluateResponse(BaseModel):
     )
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "ks_test": {
                     "age": {"statistic": 0.0412, "p_value": 0.6234},
@@ -280,7 +280,7 @@ class SchemaEvaluateResponse(BaseModel):
     message: str = Field(..., description="Status message")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "schema_validity": "PASS",
                 "type_consistency": "All columns match declared types",
@@ -309,7 +309,7 @@ class ErrorResponse(BaseModel):
     detail: Optional[str] = Field(None, description="Additional error details")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "error": "ValidationError",
                 "message": "Invalid request parameters",

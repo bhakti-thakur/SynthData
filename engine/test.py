@@ -14,7 +14,7 @@ import numpy as np
 from pathlib import Path
 import json
 
-from engine.generator import SynthDataEngine
+from generation.generator import SynthDataEngine
 from evaluation.statistics import evaluate_statistical_similarity
 from evaluation.adversarial import evaluate_adversarial_detectability
 

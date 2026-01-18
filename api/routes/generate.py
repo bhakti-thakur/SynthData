@@ -16,14 +16,14 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import FileResponse
 
 # Add engine to Python path (non-invasive)
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "engine"))
+# sys.path.insert(0, str(Path(__file__).parent.parent.parent / "engine"))
 
 # Import from existing engine (READ-ONLY)
-from engine.generator import SynthDataEngine
-from schema_generator.generator import SchemaDataGenerator
+from engine.generation.generator import SynthDataEngine
+from engine.schema_generator.generator import SchemaDataGenerator
 
-from config import config
-from schemas.requests import GenerateResponse, SchemaDefinition
+from api.config import config
+from api.schemas.requests import GenerateResponse, SchemaDefinition
 
 
 router = APIRouter(prefix="/generate", tags=["Generation"])
@@ -56,7 +56,7 @@ router = APIRouter(prefix="/generate", tags=["Generation"])
 async def generate_synthetic_data(
     file: Optional[UploadFile] = File(None, description="CSV file to upload"),
     file_path: Optional[str] = Form(None, description="Path to CSV on server"),
-    schema: Optional[str] = Form(None, description="JSON schema for schema-only generation (Mode B)"),
+    data_schema: Optional[str] = Form(None, description="JSON schema for schema-only generation (Mode B)"),
     n_rows: int = Form(1000, ge=1, le=100000, description="Rows to generate"),
     epochs: int = Form(300, ge=50, le=1000, description="Training epochs"),
     batch_size: int = Form(500, ge=100, le=2000, description="Batch size"),
@@ -77,9 +77,9 @@ async def generate_synthetic_data(
     
     # ========== STEP 0: PARSE OPTIONAL SCHEMA (MODE B) ==========
     schema_definition: Optional[SchemaDefinition] = None
-    if schema:
+    if data_schema:
         try:
-            schema_dict = json.loads(schema)
+            schema_dict = json.loads(data_schema)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

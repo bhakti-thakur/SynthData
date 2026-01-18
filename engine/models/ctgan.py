@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from ctgan import CTGAN
 
-from schema.infer import Schema
+from engine.schema.infer import Schema
 
 
 class CTGANGenerator:

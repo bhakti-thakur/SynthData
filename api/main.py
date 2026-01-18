@@ -14,9 +14,22 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from config import config
-from schemas.requests import HealthResponse, ErrorResponse
-from routes import generate, evaluate
+from api.config import config
+from api.schemas.requests import HealthResponse, ErrorResponse
+from api.routes import generate, evaluate
+
+# import sys
+import os
+
+# ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# ENGINE_DIR = os.path.join(ROOT_DIR, "engine")
+
+# if ENGINE_DIR not in sys.path:
+#     sys.path.append(ENGINE_DIR)
+
+# from config import config
+# from schemas.requests import HealthResponse, ErrorResponse
+# from routes import generate, evaluate
 
 
 # ========== CREATE FASTAPI APP ==========
@@ -133,6 +146,8 @@ async def startup_event():
     - Loading models
     - Setting up directories
     """
+    os.makedirs(config.DATA_DIR, exist_ok=True)
+
     print(f"🚀 {config.APP_TITLE} v{config.APP_VERSION} is starting...")
     print(f"📁 Data directory: {config.DATA_DIR}")
     print(f"📊 Engine directory: {config.ENGINE_DIR}")
@@ -160,9 +175,9 @@ if __name__ == "__main__":
     import uvicorn
     
     uvicorn.run(
-        "main:app",
+        "api.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,  # Auto-reload on code changes (development only)
+        reload=False,  # (True) Auto-reload on code changes (development only) False for production
         log_level="info"
     )

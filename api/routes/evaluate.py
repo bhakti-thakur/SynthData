@@ -14,17 +14,17 @@ import pandas as pd
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 
 # Add engine to Python path (non-invasive)
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "engine"))
+# sys.path.insert(0, str(Path(__file__).parent.parent.parent / "engine"))
 
 # Import from existing engine (READ-ONLY)
-from engine.generator import SynthDataEngine
-from schema.infer import infer_schema
-from evaluation.statistics import evaluate_statistical_similarity
-from evaluation.adversarial import evaluate_adversarial_detectability
-from evaluation.schema_consistency import evaluate_schema_consistency
+from engine.generation.generator import SynthDataEngine
+from engine.schema.infer import infer_schema
+from engine.evaluation.statistics import evaluate_statistical_similarity
+from engine.evaluation.adversarial import evaluate_adversarial_detectability
+from engine.evaluation.schema_consistency import evaluate_schema_consistency
 
-from config import config
-from schemas.requests import (
+from api.config import config
+from api.schemas.requests import (
     EvaluateResponse,
     SchemaEvaluateResponse,
     KSTestResult,
@@ -62,7 +62,7 @@ async def evaluate_synthetic_data(
     real_file_path: Optional[str] = Form(None, description="Path to real CSV"),
     synthetic_file_path: Optional[str] = Form(None, description="Path to synthetic CSV"),
     dataset_id: Optional[str] = Form(None, description="Dataset ID from /generate"),
-    schema: Optional[str] = Form(None, description="JSON schema for schema-only evaluation (Mode B)")
+    data_schema: Optional[str] = Form(None, description="JSON schema for schema-only evaluation (Mode B)")
 ) -> Union[EvaluateResponse, SchemaEvaluateResponse]:
     """
     Evaluate synthetic data quality.
@@ -78,9 +78,9 @@ async def evaluate_synthetic_data(
     
     # ========== STEP 0: OPTIONAL SCHEMA PARSING (MODE B) ==========
     schema_definition: Optional[SchemaDefinition] = None
-    if schema:
+    if data_schema:
         try:
-            schema_dict = json.loads(schema)
+            schema_dict = json.loads(data_schema)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
