@@ -16,7 +16,8 @@ scipy>=1.11.0,<1.13.0
 # -------------------------------
 # Synthetic Data / ML Engine
 # -------------------------------
-torch>=2.0.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.1.2+cpu
 ctgan>=0.10.0
 
 # -------------------------------
