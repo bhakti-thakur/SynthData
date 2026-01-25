@@ -58,10 +58,10 @@ async def generate_synthetic_data(
     file_path: Optional[str] = Form(None, description="Path to CSV on server"),
     schema: Optional[str] = Form(None, description="JSON schema for schema-only generation (Mode B)"),
     n_rows: int = Form(1000, ge=1, le=100000, description="Rows to generate"),
-    epochs: int = Form(300, ge=50, le=1000, description="Training epochs"),
-    batch_size: int = Form(500, ge=100, le=2000, description="Batch size"),
+    epochs: int = Form(300, ge=10, le=1000, description="Training epochs"),
+    batch_size: int = Form(500, ge=10, le=2000, description="Batch size"),
     categorical_threshold: int = Form(10, ge=2, le=50, description="Categorical threshold"),
-    apply_constraints: bool = Form(True, description="Apply post-processing")
+    apply_constraints: str = Form("true", description="Apply post-processing")
 ) -> GenerateResponse:
     """
     Generate synthetic data endpoint.
@@ -74,6 +74,9 @@ async def generate_synthetic_data(
     5. Save output CSV
     6. Return metadata (dataset_id, download URL, etc.)
     """
+    
+    # Convert apply_constraints from string to boolean
+    apply_constraints_bool = apply_constraints.lower() in ('true', '1', 'yes', 'on') if isinstance(apply_constraints, str) else apply_constraints
     
     # ========== STEP 0: PARSE OPTIONAL SCHEMA (MODE B) ==========
     schema_definition: Optional[SchemaDefinition] = None
@@ -107,15 +110,19 @@ async def generate_synthetic_data(
     if schema_definition is None:
         # Step 1: Load input data
         if file is not None:
-            if not config.validate_file_extension(file.filename):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
-                )
-
-            upload_path = config.get_upload_path(file.filename)
-
             try:
+                # Get filename, handle cases where filename might be None or empty
+                filename = file.filename if file.filename else "dataset.csv"
+                
+                if not config.validate_file_extension(filename):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
+                    )
+
+                upload_path = config.get_upload_path(filename)
+
+                # Read file contents
                 contents = await file.read()
 
                 if len(contents) > config.MAX_UPLOAD_SIZE_BYTES:
@@ -124,11 +131,21 @@ async def generate_synthetic_data(
                         detail=f"File too large. Max size: {config.MAX_UPLOAD_SIZE_MB}MB"
                     )
 
+                # Save to disk
                 with open(upload_path, "wb") as f:
                     f.write(contents)
 
+                # Read CSV
                 df_real = pd.read_csv(upload_path)
+                
+                if df_real is None or df_real.empty:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="CSV file is empty"
+                    )
 
+            except HTTPException:
+                raise
             except pd.errors.ParserError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -190,7 +207,7 @@ async def generate_synthetic_data(
         try:
             df_synthetic = engine.generate(
                 n_rows=n_rows,
-                apply_constraints=apply_constraints
+                apply_constraints=apply_constraints_bool
             )
         except Exception as e:
             raise HTTPException(

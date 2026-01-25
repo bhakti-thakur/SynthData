@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -17,6 +18,62 @@ export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, 
   const [numberOfRows, setNumberOfRows] = React.useState('5000');
   const [schemaText, setSchemaText] = React.useState('');
   const [showSidebar, setShowSidebar] = React.useState(false);
+  const [isGenerating, setIsGenerating] = React.useState(false);
+
+  const generateSchema = async () => {
+    if (isGenerating) return;
+
+    if (!schemaText.trim()) {
+      Alert.alert('Error', 'Please enter a schema');
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      let schema;
+      try {
+        schema = JSON.parse(schemaText);
+      } catch (e) {
+        Alert.alert('Error', 'Invalid JSON schema. Please check the format.');
+        setIsGenerating(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('schema', JSON.stringify(schema));
+      formData.append('n_rows', String(parseInt(numberOfRows) || 5000));
+      formData.append('epochs', '300');
+      formData.append('batch_size', '500');
+      formData.append('categorical_threshold', '10');
+      formData.append('apply_constraints', 'true');
+
+      const response = await fetch("http://localhost:8000/generate", {
+        method: "POST",
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert(
+          'Success',
+          `Generated ${data.rows_generated} rows. Dataset ID: ${data.dataset_id}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', data.detail || 'Failed to generate data');
+      }
+    } catch (error) {
+      console.error("Failed to generate data:", error);
+      Alert.alert('Error', 'Failed to generate data. Please check your connection.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <LinearGradient
@@ -113,7 +170,11 @@ export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, 
         </View>
 
         {/* Generate Button */}
-        <TouchableOpacity style={styles.generateButtonContainer}>
+        <TouchableOpacity 
+          style={styles.generateButtonContainer}
+          onPress={generateSchema}
+          disabled={isGenerating}
+        >
           <LinearGradient
             colors={['#8A2BE2', '#FF1493', '#FFC107']}
             start={{ x: 0, y: 0 }}
@@ -121,7 +182,9 @@ export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, 
             style={styles.generateButtonGradient}
           >
             <View style={styles.generateButtonInner}>
-              <Text style={styles.generateButtonText}>Generate Synthetic Data</Text>
+              <Text style={styles.generateButtonText}>
+                {isGenerating ? 'Generating...' : 'Generate Synthetic Data'}
+              </Text>
             </View>
           </LinearGradient>
         </TouchableOpacity>

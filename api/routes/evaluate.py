@@ -105,13 +105,16 @@ async def evaluate_synthetic_data(
     
     if real_file is not None:
         # Option A: Upload
-        if not config.validate_file_extension(real_file.filename):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
-            )
-        
         try:
+            # Get filename, handle cases where filename might be None or empty
+            filename = real_file.filename if real_file.filename else "real_data.csv"
+            
+            if not config.validate_file_extension(filename):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
+                )
+            
             contents = await real_file.read()
             
             if len(contents) > config.MAX_UPLOAD_SIZE_BYTES:
@@ -121,12 +124,14 @@ async def evaluate_synthetic_data(
                 )
             
             # Save temporarily
-            temp_path = config.UPLOADS_DIR / f"temp_real_{real_file.filename}"
+            temp_path = config.UPLOADS_DIR / f"temp_real_{filename}"
             with open(temp_path, "wb") as f:
                 f.write(contents)
             
             df_real = pd.read_csv(temp_path)
             
+        except HTTPException:
+            raise
         except pd.errors.ParserError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -168,13 +173,16 @@ async def evaluate_synthetic_data(
     
     if synthetic_file is not None:
         # Option A: Upload
-        if not config.validate_file_extension(synthetic_file.filename):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
-            )
-        
         try:
+            # Get filename, handle cases where filename might be None or empty
+            filename = synthetic_file.filename if synthetic_file.filename else "synthetic_data.csv"
+            
+            if not config.validate_file_extension(filename):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid file type. Allowed: {config.ALLOWED_EXTENSIONS}"
+                )
+            
             contents = await synthetic_file.read()
             
             if len(contents) > config.MAX_UPLOAD_SIZE_BYTES:
@@ -183,12 +191,14 @@ async def evaluate_synthetic_data(
                     detail=f"File too large. Max size: {config.MAX_UPLOAD_SIZE_MB}MB"
                 )
             
-            temp_path = config.UPLOADS_DIR / f"temp_synthetic_{synthetic_file.filename}"
+            temp_path = config.UPLOADS_DIR / f"temp_synthetic_{filename}"
             with open(temp_path, "wb") as f:
                 f.write(contents)
             
             df_synthetic = pd.read_csv(temp_path)
             
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

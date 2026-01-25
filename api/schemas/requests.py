@@ -87,14 +87,14 @@ class GenerateRequest(BaseModel):
     
     epochs: Optional[int] = Field(
         300,
-        ge=50,
+        ge=10,
         le=1000,
         description="CTGAN training epochs (more = better quality, slower)"
     )
     
     batch_size: Optional[int] = Field(
         500,
-        ge=100,
+        ge=10,
         le=2000,
         description="CTGAN batch size"
     )

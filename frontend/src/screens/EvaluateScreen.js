@@ -6,9 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
+import * as DocumentPicker from 'expo-document-picker';
 import Sidebar from '../../components/Sidebar';
 import SchemaEvaluateScreen from './SchemaEvaluateScreen';
 
@@ -16,6 +18,8 @@ export default function EvaluateScreen({ onBack, goToLogin, goToGenerate, goToEv
   const [selectedMethod, setSelectedMethod] = React.useState('Statistical');
   const [showSidebar, setShowSidebar] = React.useState(false);
   const [datasetId, setDatasetId] = React.useState('');
+  const [realFile, setRealFile] = React.useState(null);
+  const [isEvaluating, setIsEvaluating] = React.useState(false);
 
   /* 🔁 SWITCH TO SCHEMA SCREEN */
   if (selectedMethod === 'Schema Check') {
@@ -31,6 +35,82 @@ export default function EvaluateScreen({ onBack, goToLogin, goToGenerate, goToEv
       />
     );
   }
+
+  const evaluatedata = async () => {
+    if (isEvaluating) return;
+
+    if (!realFile) {
+      Alert.alert('Error', 'Please upload a real dataset file');
+      return;
+    }
+
+    if (!datasetId) {
+      Alert.alert('Error', 'Please provide a dataset ID for synthetic data');
+      return;
+    }
+
+    setIsEvaluating(true);
+
+    try {
+      const formData = new FormData();
+      
+      formData.append('real_file', {
+        uri: realFile.uri,
+        type: 'text/csv',
+        name: realFile.name || 'real_data.csv',
+      });
+
+      formData.append('dataset_id', datasetId);
+
+      const response = await fetch("http://localhost:8000/evaluate", {
+        method: "POST",
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        let message = 'Evaluation completed successfully!\n\n';
+        if (data.interpretation) {
+          Object.entries(data.interpretation).forEach(([key, value]) => {
+            message += `${key}: ${value}\n`;
+          });
+        }
+        Alert.alert('Success', message, [{ text: 'OK' }]);
+      } else {
+        Alert.alert('Error', data.detail || 'Failed to evaluate data');
+      }
+    } catch (error) {
+      console.error("Failed to evaluate data:", error);
+      Alert.alert('Error', 'Failed to evaluate data. Please check your connection.');
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
+  const pickRealFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'application/csv', 'text/comma-separated-values'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        setRealFile({
+          uri: file.uri,
+          name: file.name,
+          mimeType: file.mimeType || 'text/csv',
+        });
+      }
+    } catch (error) {
+      console.error('Error picking file:', error);
+      Alert.alert('Error', 'Failed to pick file. Please try again.');
+    }
+  };
 
   return (
     <LinearGradient
@@ -108,12 +188,12 @@ export default function EvaluateScreen({ onBack, goToLogin, goToGenerate, goToEv
         <View style={styles.card}>
           {/* Real Data */}
           <Text style={styles.label}>Real Data</Text>
-          <View style={styles.inputBox}>
+          <TouchableOpacity style={styles.inputBox} onPress={pickRealFile}>
             <Text style={styles.plus}>＋</Text>
             <Text style={styles.placeholder}>
-              Upload your real dataset
+              {realFile ? realFile.name || 'File selected' : 'Upload your real dataset'}
             </Text>
-          </View>
+          </TouchableOpacity>
 
           {/* Synthetic Dataset */}
           <Text style={[styles.label, { marginTop: 24 }]}>
@@ -130,7 +210,11 @@ export default function EvaluateScreen({ onBack, goToLogin, goToGenerate, goToEv
         </View>
 
         {/* Check Button */}
-        <TouchableOpacity style={styles.buttonContainer}>
+        <TouchableOpacity 
+          style={styles.buttonContainer}
+          onPress={evaluatedata}
+          disabled={isEvaluating}
+        >
           <LinearGradient
             colors={['#8A2BE2', '#FF1493', '#FFC107']}
             start={{ x: 0, y: 0 }}
@@ -138,7 +222,9 @@ export default function EvaluateScreen({ onBack, goToLogin, goToGenerate, goToEv
             style={styles.buttonGradient}
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.buttonText}>Check</Text>
+              <Text style={styles.buttonText}>
+                {isEvaluating ? 'Evaluating...' : 'Check'}
+              </Text>
             </View>
           </LinearGradient>
         </TouchableOpacity>

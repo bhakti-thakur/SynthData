@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
+import * as DocumentPicker from 'expo-document-picker';
 import SchemaBasedScreen from './SchemaBasedScreen';
 import Sidebar from '../../components/Sidebar';
 const { width } = Dimensions.get('window');
@@ -20,6 +22,8 @@ export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, go
   const [batchSize, setBatchSize] = React.useState('64');
   const [epochs, setEpochs] = React.useState('25');
   const [showSidebar, setShowSidebar] = React.useState(false);
+  const [selectedFile, setSelectedFile] = React.useState(null);
+  const [isGenerating, setIsGenerating] = React.useState(false);
 
   if (selectedMethod === 'Schema Based') {
     return (
@@ -34,6 +38,79 @@ export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, go
       />
     );
   }
+
+  const generatedata = async () => {
+    if (isGenerating) return;
+    
+    if (!selectedFile) {
+      Alert.alert('Error', 'Please select a file first');
+      return;
+    }
+
+    setIsGenerating(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: selectedFile.uri,
+        type: 'text/csv',
+        name: selectedFile.name || 'dataset.csv',
+      });
+      formData.append('n_rows', String(parseInt(numberOfRows) || 5000));
+      formData.append('epochs', String(parseInt(epochs) || 25));
+      formData.append('batch_size', String(parseInt(batchSize) || 64));
+      formData.append('categorical_threshold', '10');
+      formData.append('apply_constraints', 'true');
+
+      const response = await fetch("http://localhost:8000/generate", {
+        method: "POST",
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        Alert.alert(
+          'Success',
+          `Generated ${data.rows_generated} rows. Dataset ID: ${data.dataset_id}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', data.detail || 'Failed to generate data');
+      }
+    } catch (error) {
+      console.error("Failed to generate data:", error);
+      Alert.alert('Error', 'Failed to generate data. Please check your connection.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const pickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'application/csv', 'text/comma-separated-values'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        setSelectedFile({
+          uri: file.uri,
+          name: file.name,
+          mimeType: file.mimeType || 'text/csv',
+        });
+      }
+    } catch (error) {
+      console.error('Error picking file:', error);
+      Alert.alert('Error', 'Failed to pick file. Please try again.');
+    }
+  };
+        
+
 
   return (
     <LinearGradient
@@ -134,9 +211,12 @@ export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, go
                 Real Dataset (CSV, JSON or Parquet upto 50MB)
               </Text>
             </View>
-            <TouchableOpacity style={styles.browseButton}>
+            <TouchableOpacity style={styles.browseButton} onPress={pickFile}>
               <Text style={styles.browseButtonText}>Browse</Text>
             </TouchableOpacity>
+            {selectedFile && (
+              <Text style={styles.fileName}>{selectedFile.name || 'File selected'}</Text>
+            )}
           </View>
 
           {/* Input Fields */}
@@ -172,7 +252,11 @@ export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, go
         </View>
 
         {/* Generate Button */}
-        <TouchableOpacity style={styles.generateButtonContainer}>
+        <TouchableOpacity 
+          style={styles.generateButtonContainer}
+          onPress={generatedata}
+          disabled={isGenerating}
+        >
           <LinearGradient
             colors={['#8A2BE2', '#FF1493', '#FFC107']}
             start={{ x: 0, y: 0 }}
@@ -180,7 +264,9 @@ export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, go
             style={styles.generateButtonGradient}
           >
             <View style={styles.generateButtonInner}>
-              <Text style={styles.generateButtonText}>Generate Synthetic Data</Text>
+              <Text style={styles.generateButtonText}>
+                {isGenerating ? 'Generating...' : 'Generate Synthetic Data'}
+              </Text>
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -320,6 +406,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#000',
+  },
+  fileName: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: 16,

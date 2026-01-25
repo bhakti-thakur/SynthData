@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +22,65 @@ export default function SchemaEvaluateScreen({
   const [showSidebar, setShowSidebar] = React.useState(false);
   const [schema, setSchema] = React.useState('');
   const [datasetId, setDatasetId] = React.useState('');
+  const [isEvaluating, setIsEvaluating] = React.useState(false);
+
+  const checkSchema = async () => {
+    if (isEvaluating) return;
+
+    if (!schema.trim()) {
+      Alert.alert('Error', 'Please enter a schema');
+      return;
+    }
+
+    if (!datasetId.trim()) {
+      Alert.alert('Error', 'Please provide a dataset ID');
+      return;
+    }
+
+    setIsEvaluating(true);
+
+    try {
+      let schemaObj;
+      try {
+        schemaObj = JSON.parse(schema);
+      } catch (e) {
+        Alert.alert('Error', 'Invalid JSON schema. Please check the format.');
+        setIsEvaluating(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('schema', JSON.stringify(schemaObj));
+      formData.append('dataset_id', datasetId);
+
+      const response = await fetch("http://localhost:8000/evaluate", {
+        method: "POST",
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        let message = 'Schema check completed successfully!\n\n';
+        if (data.interpretation) {
+          Object.entries(data.interpretation).forEach(([key, value]) => {
+            message += `${key}: ${value}\n`;
+          });
+        }
+        Alert.alert('Success', message, [{ text: 'OK' }]);
+      } else {
+        Alert.alert('Error', data.detail || 'Failed to evaluate schema');
+      }
+    } catch (error) {
+      console.error("Failed to evaluate schema:", error);
+      Alert.alert('Error', 'Failed to evaluate schema. Please check your connection.');
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
 
   return (
     <LinearGradient
@@ -99,8 +159,16 @@ export default function SchemaEvaluateScreen({
           {/* Schema Upload */}
           <Text style={styles.label}>Schema</Text>
           <View style={styles.inputBox}>
-            <Text style={styles.plus}>＋</Text>
-            <Text style={styles.placeholder}>Upload your Schema</Text>
+            <TextInput
+              style={[styles.input, styles.schemaInput]}
+              placeholder="Enter your schema JSON"
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={4}
+              value={schema}
+              onChangeText={setSchema}
+              textAlignVertical="top"
+            />
           </View>
 
           {/* Dataset ID */}
@@ -118,7 +186,11 @@ export default function SchemaEvaluateScreen({
         </View>
 
         {/* Check Button */}
-        <TouchableOpacity style={styles.buttonContainer}>
+        <TouchableOpacity 
+          style={styles.buttonContainer}
+          onPress={checkSchema}
+          disabled={isEvaluating}
+        >
           <LinearGradient
             colors={['#8A2BE2', '#FF1493', '#FFC107']}
             start={{ x: 0, y: 0 }}
@@ -126,7 +198,9 @@ export default function SchemaEvaluateScreen({
             style={styles.buttonGradient}
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.buttonText}>Check</Text>
+              <Text style={styles.buttonText}>
+                {isEvaluating ? 'Checking...' : 'Check'}
+              </Text>
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -250,6 +324,12 @@ const styles = StyleSheet.create({
       flex: 1,
       fontSize: 15,
       color: '#000',
+    },
+
+    schemaInput: {
+      minHeight: 100,
+      textAlignVertical: 'top',
+      paddingVertical: 10,
     },
   
     buttonContainer: {
