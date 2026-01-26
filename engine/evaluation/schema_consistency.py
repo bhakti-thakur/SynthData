@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Dict
 import pandas as pd
 
-from schema_generator.generator import SUPPORTED_TYPES
+from engine.schema_generator.generator import SUPPORTED_TYPES
 
 
 def _validate_identifier(series: pd.Series, start: int = 1):

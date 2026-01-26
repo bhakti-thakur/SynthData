@@ -8,6 +8,12 @@ NO business logic here — only configuration values.
 from pathlib import Path
 from typing import Optional
 
+import os
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+DATA_DIR = os.path.join(BASE_DIR, "data", "generated")
+ENGINE_DIR = os.path.join(BASE_DIR, "engine")
 
 class Config:
     """

@@ -1,7 +1,93 @@
 data/
 *.csv
 
-api/
-venv/
+# ===============================
+# Python
+# ===============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
 
+# ===============================
+# Virtual Environments
+# ===============================
+venv/
+env/
+testenv/
 .venv/
+
+# ===============================
+# Environment variables / secrets
+# ===============================
+.env
+.env.*
+!.env.example
+
+# ===============================
+# OS / Editor junk
+# ===============================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# ===============================
+# Logs
+# ===============================
+*.log
+logs/
+
+# ===============================
+# ML / Data artifacts
+# ===============================
+data/
+data/generated/
+data/raw/
+data/tmp/
+
+# ===============================
+# Model artifacts
+# ===============================
+models/
+*.pt
+*.pth
+*.ckpt
+
+# ===============================
+# Jupyter / Experiments
+# ===============================
+.ipynb_checkpoints/
+
+# ===============================
+# Build / cache
+# ===============================
+build/
+dist/
+.cache/
+.pytest_cache/
+
+# ===============================
+# Node / React Native (future-proof)
+# ===============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===============================
+# Deployment / platform
+# ===============================
+.Dockerfile.swp
+railway.toml.backup
+
+# ===============================
+# Misc
+# ===============================
+*.tmp
+*.bak
