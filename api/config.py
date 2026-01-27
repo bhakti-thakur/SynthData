@@ -70,6 +70,8 @@ class Config:
         "http://localhost:8081",  # Expo default
         "http://localhost:19000",  # Expo alternative
         "http://localhost:19002",  # Expo web
+        "*",  # Allow all origins (for Expo tunnel and development)
+        "https://1ruxbmk-anonymous-8081.exp.direct/"
     ]
     
     # File upload limits

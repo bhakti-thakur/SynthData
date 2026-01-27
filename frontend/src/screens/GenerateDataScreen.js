@@ -18,9 +18,9 @@ const { width } = Dimensions.get('window');
 
 export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, goToEvaluate, goToHome, goToAbout }) {
   const [selectedMethod, setSelectedMethod] = React.useState('Model Based');
-  const [numberOfRows, setNumberOfRows] = React.useState('5000');
+  const [numberOfRows, setNumberOfRows] = React.useState('1000');
   const [batchSize, setBatchSize] = React.useState('64');
-  const [epochs, setEpochs] = React.useState('25');
+  const [epochs, setEpochs] = React.useState('100');
   const [showSidebar, setShowSidebar] = React.useState(false);
   const [selectedFile, setSelectedFile] = React.useState(null);
   const [isGenerating, setIsGenerating] = React.useState(false);
@@ -56,8 +56,8 @@ export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, go
         type: 'text/csv',
         name: selectedFile.name || 'dataset.csv',
       });
-      formData.append('n_rows', String(parseInt(numberOfRows) || 5000));
-      formData.append('epochs', String(parseInt(epochs) || 25));
+      formData.append('n_rows', String(parseInt(numberOfRows) || 1000));
+      formData.append('epochs', String(parseInt(epochs) || 100));
       formData.append('batch_size', String(parseInt(batchSize) || 64));
       formData.append('categorical_threshold', '10');
       formData.append('apply_constraints', 'true');

@@ -8,6 +8,7 @@ import {
   TextInput,
   Dimensions,
   Alert,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -23,6 +24,7 @@ export default function SchemaEvaluateScreen({
   const [schema, setSchema] = React.useState('');
   const [datasetId, setDatasetId] = React.useState('');
   const [isEvaluating, setIsEvaluating] = React.useState(false);
+  const [result, setResult] = React.useState(null);
 
   const checkSchema = async () => {
     if (isEvaluating) return;
@@ -50,7 +52,7 @@ export default function SchemaEvaluateScreen({
       }
 
       const formData = new FormData();
-      formData.append('schema', JSON.stringify(schemaObj));
+      formData.append('data_schema', JSON.stringify(schemaObj));
       formData.append('dataset_id', datasetId);
 
       const response = await fetch("http://localhost:8000/evaluate", {
@@ -64,6 +66,7 @@ export default function SchemaEvaluateScreen({
       const data = await response.json();
 
       if (response.ok) {
+        setResult(data);
         let message = 'Schema check completed successfully!\n\n';
         if (data.interpretation) {
           Object.entries(data.interpretation).forEach(([key, value]) => {
@@ -204,6 +207,37 @@ export default function SchemaEvaluateScreen({
             </View>
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Result Box */}
+        {result && (
+          <View style={styles.resultCard}>
+            <Text style={styles.resultTitle}>✓ Evaluation Complete</Text>
+            <Text style={styles.resultText}>
+              Schema Validity: <Text style={styles.boldText}>{result.schema_validity}</Text>
+            </Text>
+            <Text style={styles.resultText}>
+              Type Consistency: <Text style={styles.boldText}>{result.type_consistency}</Text>
+            </Text>
+            {result.range_violations !== undefined && (
+              <Text style={styles.resultText}>
+                Range Violations: <Text style={styles.boldText}>{result.range_violations}</Text>
+              </Text>
+            )}
+            {result.category_violations !== undefined && (
+              <Text style={styles.resultText}>
+                Category Violations: <Text style={styles.boldText}>{result.category_violations}</Text>
+              </Text>
+            )}
+            {result.identifier_issues && (
+              <Text style={[styles.resultText, styles.warningText]}>
+                Issues: <Text style={styles.boldText}>{result.identifier_issues}</Text>
+              </Text>
+            )}
+            {result.message && (
+              <Text style={styles.resultMessage}>{result.message}</Text>
+            )}
+          </View>
+        )}
       </ScrollView>
     </LinearGradient>
   );
@@ -350,6 +384,44 @@ const styles = StyleSheet.create({
       fontSize: 16,
       fontWeight: '700',
       color: '#000',
+    },
+    resultCard: {
+      backgroundColor: '#E8F5E9',
+      borderLeftWidth: 4,
+      borderLeftColor: '#4CAF50',
+      borderRadius: 12,
+      padding: 20,
+      marginHorizontal: 20,
+      marginTop: 24,
+      marginBottom: 40,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    resultTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: '#2E7D32',
+      marginBottom: 12,
+    },
+    resultText: {
+      fontSize: 14,
+      color: '#1B5E20',
+      marginBottom: 8,
+    },
+    warningText: {
+      color: '#D32F2F',
+    },
+    boldText: {
+      fontWeight: '700',
+    },
+    resultMessage: {
+      fontSize: 13,
+      color: '#558B2F',
+      marginTop: 12,
+      fontStyle: 'italic',
     },
   });
   

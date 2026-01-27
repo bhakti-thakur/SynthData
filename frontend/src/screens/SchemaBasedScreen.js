@@ -8,6 +8,7 @@ import {
   TextInput,
   Dimensions,
   Alert,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -15,10 +16,11 @@ import Sidebar from '../../components/Sidebar';
 const { width } = Dimensions.get('window');
 
 export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, goToGenerate, goToEvaluate, goToHome, goToAbout }) {
-  const [numberOfRows, setNumberOfRows] = React.useState('5000');
+  const [numberOfRows, setNumberOfRows] = React.useState('1000');
   const [schemaText, setSchemaText] = React.useState('');
   const [showSidebar, setShowSidebar] = React.useState(false);
   const [isGenerating, setIsGenerating] = React.useState(false);
+  const [result, setResult] = React.useState(null);
 
   const generateSchema = async () => {
     if (isGenerating) return;
@@ -41,13 +43,8 @@ export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, 
       }
 
       const formData = new FormData();
-      formData.append('schema', JSON.stringify(schema));
-      formData.append('n_rows', String(parseInt(numberOfRows) || 5000));
-      formData.append('epochs', '300');
-      formData.append('batch_size', '500');
-      formData.append('categorical_threshold', '10');
-      formData.append('apply_constraints', 'true');
-
+      formData.append('data_schema', JSON.stringify(schema));
+      formData.append('n_rows', String(parseInt(numberOfRows) || 1000));
       const response = await fetch("http://localhost:8000/generate", {
         method: "POST",
         body: formData,
@@ -59,6 +56,7 @@ export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, 
       const data = await response.json();
 
       if (response.ok) {
+        setResult(data);
         Alert.alert(
           'Success',
           `Generated ${data.rows_generated} rows. Dataset ID: ${data.dataset_id}`,
@@ -188,6 +186,34 @@ export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, 
             </View>
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Result Box */}
+        {result && (
+          <View style={styles.resultCard}>
+            <Text style={styles.resultTitle}>✓ Generation Complete</Text>
+            <Text style={styles.resultText}>
+              Dataset ID: <Text style={styles.boldText}>{result.dataset_id}</Text>
+            </Text>
+            <Text style={styles.resultText}>
+              Rows Generated: <Text style={styles.boldText}>{result.rows_generated}</Text>
+            </Text>
+            <Text style={styles.resultText}>
+              Columns: <Text style={styles.boldText}>{result.columns.join(', ')}</Text>
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.downloadButton}
+              onPress={() => {
+                if (result.download_url) {
+                  Linking.openURL(`http://localhost:8000${result.download_url}`)
+                    .catch(err => Alert.alert('Error', 'Could not open download link'));
+                }
+              }}
+            >
+              <Text style={styles.downloadButtonText}>📥 Download CSV</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </LinearGradient>
   );
@@ -347,5 +373,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#000',
+  },
+  resultCard: {
+    backgroundColor: '#E8F5E9',
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+    borderRadius: 12,
+    padding: 20,
+    marginHorizontal: 20,
+    marginTop: 24,
+    marginBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resultTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2E7D32',
+    marginBottom: 12,
+  },
+  resultText: {
+    fontSize: 14,
+    color: '#1B5E20',
+    marginBottom: 8,
+  },
+  boldText: {
+    fontWeight: '700',
+  },
+  downloadButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  downloadButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
