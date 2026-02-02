@@ -53,6 +53,7 @@ export default function SchemaBasedScreen({ onBack, onSwitchToModel, goToLogin, 
         },
       });
 
+      console.log("Request data:", formData);
       const data = await response.json();
 
       if (response.ok) {

@@ -18,8 +18,8 @@ const { width } = Dimensions.get('window');
 
 export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, goToEvaluate, goToHome, goToAbout }) {
   const [selectedMethod, setSelectedMethod] = React.useState('Model Based');
-  const [numberOfRows, setNumberOfRows] = React.useState('1000');
-  const [batchSize, setBatchSize] = React.useState('64');
+  const [numberOfRows, setNumberOfRows] = React.useState('100');
+  const [batchSize, setBatchSize] = React.useState('100');
   const [epochs, setEpochs] = React.useState('100');
   const [showSidebar, setShowSidebar] = React.useState(false);
   const [selectedFile, setSelectedFile] = React.useState(null);
@@ -52,21 +52,25 @@ export default function GenerateDataScreen({ onBack, goToLogin, goToGenerate, go
     try {
       const formData = new FormData();
       formData.append('file', {
-        uri: selectedFile.uri,
+        uri: selectedFile.uri.startsWith('file://')
+          ? selectedFile.uri
+          : `file://${selectedFile.uri}`,
         type: 'text/csv',
         name: selectedFile.name || 'dataset.csv',
       });
       formData.append('n_rows', String(parseInt(numberOfRows) || 1000));
       formData.append('epochs', String(parseInt(epochs) || 100));
-      formData.append('batch_size', String(parseInt(batchSize) || 64));
+      formData.append('batch_size', String(parseInt(batchSize) || 100));
       formData.append('categorical_threshold', '10');
-      formData.append('apply_constraints', 'true');
+      formData.append('apply_constraints', 'yes');
+
+      console.log("Sending request with data:", formData);
 
       const response = await fetch("http://localhost:8000/generate", {
         method: "POST",
         body: formData,
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
       });
 
