@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from "react";
-import * as DocumentPicker from "expo-document-picker";
-import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Input } from "../../components/Input";
 import { Screen } from "../../components/Screen";
 import { SegmentedControl } from "../../components/SegmentedControl";
+import { UploadField } from "../../components/UploadField";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
@@ -17,33 +16,6 @@ export function GeneratorScreen() {
   const [modelFileName, setModelFileName] = useState<string | null>(null);
   const [schemaFileName, setSchemaFileName] = useState<string | null>(null);
   const [schemaText, setSchemaText] = useState("");
-
-  const handlePickModel = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["text/csv", "application/json"],
-      copyToCacheDirectory: true,
-    });
-
-    if (result.canceled || result.assets.length === 0) {
-      return;
-    }
-
-    setModelFileName(result.assets[0].name ?? "Selected file");
-  };
-
-  const handlePickSchema = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["application/json", "text/plain"],
-      copyToCacheDirectory: true,
-    });
-
-    if (result.canceled || result.assets.length === 0) {
-      return;
-    }
-
-    setSchemaFileName(result.assets[0].name ?? "Selected file");
-    setSchemaText("");
-  };
 
   const handleSchemaTextChange = (text: string) => {
     setSchemaText(text);
@@ -70,29 +42,14 @@ export function GeneratorScreen() {
           <View style={styles.section}>
             <Card>
               <Text style={styles.cardTitle}>Data Configuration</Text>
-              <View style={styles.uploadBox}>
-                <Ionicons name="document" size={22} color={colors.textMuted} />
-                {modelFileName ? (
-                  <Text style={styles.fileName}>{modelFileName}</Text>
-                ) : (
-                  <Text style={styles.uploadText}>Real Dataset (CSV or JSON)</Text>
-                )}
-                {modelFileName ? (
-                  <Pressable
-                    onPress={() => setModelFileName(null)}
-                    style={styles.trashButton}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={colors.textPrimary} />
-                  </Pressable>
-                ) : (
-                  <Button
-                    label="Browse"
-                    variant="secondary"
-                    style={styles.browseButton}
-                    onPress={handlePickModel}
-                  />
-                )}
-              </View>
+              <UploadField
+                placeholder="Real Dataset (CSV or JSON)"
+                types={["text/csv", "application/json"]}
+                iconName="document"
+                value={modelFileName}
+                onChangeFileName={setModelFileName}
+                boxStyle={styles.uploadBox}
+              />
               <View style={styles.inputsGroup}>
                 <Input label="Number of Rows" placeholder="100" />
                 <Input label="Batch Size" placeholder="100" />
@@ -106,6 +63,20 @@ export function GeneratorScreen() {
           <View style={styles.section}>
             <Card>
               <Text style={styles.cardTitle}>Enter Your Schema</Text>
+              <UploadField
+                placeholder={schemaText.length > 0 ? "Pasted schema" : "Upload your Schema (JSON)"}
+                types={["application/json", "text/plain"]}
+                iconName="add"
+                value={schemaFileName}
+                onChangeFileName={(name) => {
+                  setSchemaFileName(name);
+                  if (name) {
+                    setSchemaText("");
+                  }
+                }}
+                boxStyle={styles.uploadBoxLarge}
+              />
+              <Text style={styles.orText}> OR </Text>
               <TextInput
                 placeholder="Paste your schema (JSON)"
                 placeholderTextColor={colors.textMuted}
@@ -115,39 +86,6 @@ export function GeneratorScreen() {
                 textAlignVertical="top"
                 style={styles.schemaInput}
               />
-              <Text style={styles.orText}> OR </Text>
-              <View style={styles.uploadBoxLarge}>
-                {/* <View style={styles.uploadRow}>
-                  <Ionicons name="add" size={18} color={colors.textMuted} />
-                  <Text style={styles.uploadText}>Upload your Schema</Text>
-                </View> */}
-                
-                {schemaFileName ? (
-                  <Text style={styles.fileName}>{schemaFileName}</Text>
-                ) : schemaText.length > 0 ? (
-                  <Text style={styles.fileName}>Pasted schema</Text>
-                ) : (
-                  <Text style={styles.uploadText}>Upload your Schema (JSON)</Text>
-                )}
-                {schemaFileName || schemaText.length > 0 ? (
-                  <Pressable
-                    onPress={() => {
-                      setSchemaFileName(null);
-                      setSchemaText("");
-                    }}
-                    style={styles.trashButton}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={colors.textPrimary} />
-                  </Pressable>
-                ) : (
-                  <Button
-                    label="Browse"
-                    variant="secondary"
-                    style={styles.browseButton}
-                    onPress={handlePickSchema}
-                  />
-                )}
-              </View>
               <View style={styles.inputsGroup}>
                 <Input label="Number of Rows" placeholder="100" />
               </View>
@@ -188,48 +126,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   uploadBox: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   uploadBoxLarge: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.md,
     minHeight: 100,
     marginBottom: spacing.lg,
-  },
-  uploadRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  uploadText: {
-    fontFamily: typography.fontFamily.regular,
-    fontSize: typography.size.md,
-    color: colors.textMuted,
-    textAlign: "center",
   },
   orText: {
     fontFamily: typography.fontFamily.medium,
     fontSize: typography.size.md,
     color: colors.textPrimary,
-    marginVertical: spacing.md,
-  },
-  fileName: {
-    fontFamily: typography.fontFamily.medium,
-    fontSize: typography.size.md,
-    color: colors.textPrimary,
-    textAlign: "center",
+    marginBottom: spacing.md,
   },
   schemaInput: {
     width: "100%",
@@ -242,19 +149,7 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.textPrimary,
     backgroundColor: colors.card,
-  },
-  trashButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  browseButton: {
-    fontFamily: typography.fontFamily.regular,
-    fontSize: 10,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
   inputsGroup: {
     gap: spacing.md,
