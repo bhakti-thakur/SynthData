@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import type { DocumentPickerAsset } from "expo-document-picker";
+import { Alert, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
+import { GenerationResultCard } from "../../components/GenerationResultCard";
 import { Input } from "../../components/Input";
 import { Screen } from "../../components/Screen";
 import { SegmentedControl } from "../../components/SegmentedControl";
@@ -16,6 +18,137 @@ export function GeneratorScreen() {
   const [modelFileName, setModelFileName] = useState<string | null>(null);
   const [schemaFileName, setSchemaFileName] = useState<string | null>(null);
   const [schemaText, setSchemaText] = useState("");
+  const [modelFile, setModelFile] = useState<DocumentPickerAsset | null>(null);
+  const [schemaFile, setSchemaFile] = useState<DocumentPickerAsset | null>(null);
+  const [rows, setRows] = useState("");
+  const [batchSize, setBatchSize] = useState("");
+  const [epochs, setEpochs] = useState("");
+  const [schemaRows, setSchemaRows] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationResult, setGenerationResult] = useState<{
+    dataset_id: string;
+    download_url: string;
+  } | null>(null);
+
+  const handleDownload = async (url: string) => {
+    const baseUrl = "http://localhost:8000";
+    const resolvedUrl = url.startsWith("/") ? `${baseUrl}${url}` : url;
+    try {
+      await Linking.openURL(resolvedUrl);
+    } catch (error) {
+      console.log("Download error", error);
+      Alert.alert("Download failed", "Unable to open download link.");
+    }
+  };
+
+  const handleGenerate = async () => {
+    const baseUrl = "http://localhost:8000";
+    if (isGenerating) {
+      return;
+    }
+
+    if (activeSegment === "Model") {
+      const nRows = Number(rows);
+      const batch = Number(batchSize);
+      const epochCount = Number(epochs);
+      if (!modelFile || Number.isNaN(nRows) || Number.isNaN(batch) || Number.isNaN(epochCount)) {
+        Alert.alert("Missing data", "Please select a file and fill in all fields.");
+        return;
+      }
+
+      if (!modelFile.uri || !modelFile.name || !modelFile.mimeType) {
+        console.log("Generate error", "Missing file metadata", modelFile);
+        Alert.alert("Generate failed", "Invalid file selection.");
+        return;
+      }
+
+      const fileUri =
+        modelFile.uri.startsWith("file://") || modelFile.uri.startsWith("content://")
+          ? modelFile.uri
+          : `file://${modelFile.uri}`;
+
+      const formData = new FormData();
+      if (Platform.OS === "web") {
+        if (!modelFile.file) {
+          console.log("Generate error", "Missing web file object", modelFile);
+          Alert.alert("Generate failed", "Invalid file selection.");
+          return;
+        }
+        formData.append("file", modelFile.file);
+      } else {
+        formData.append(
+          "file",
+          {
+            uri: fileUri,
+            name: modelFile.name,
+            type: modelFile.mimeType,
+          } as any,
+        );
+      }
+      formData.append("n_rows", String(nRows));
+      formData.append("epochs", String(epochCount));
+      formData.append("batch_size", String(batch));
+      formData.append("apply_constraints", "true");
+
+      try {
+        setIsGenerating(true);
+        const response = await fetch(`${baseUrl}/generate`, {
+          method: "POST",
+          body: formData,
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          console.log("Generate error", payload);
+          Alert.alert("Generate failed", payload?.detail ?? "Request failed");
+          return;
+        }
+        setGenerationResult({
+          dataset_id: payload.dataset_id,
+          download_url: payload.download_url,
+        });
+        console.log("Generate success", payload);
+      } catch (error) {
+        console.log("Generate error", error);
+        Alert.alert("Generate failed", "Unable to reach server.");
+      } finally {
+        setIsGenerating(false);
+      }
+    } else {
+      const nRows = Number(schemaRows);
+      if (schemaText.trim().length === 0 || Number.isNaN(nRows)) {
+        Alert.alert("Missing data", "Please paste schema JSON and enter rows.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("schema", schemaText);
+      formData.append("n_rows", String(nRows));
+
+      try {
+        setIsGenerating(true);
+        const response = await fetch(`${baseUrl}/generate`, {
+          method: "POST",
+          body: formData,
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          console.log("Generate error", payload);
+          Alert.alert("Generate failed", payload?.detail ?? "Request failed");
+          return;
+        }
+        setGenerationResult({
+          dataset_id: payload.dataset_id,
+          download_url: payload.download_url,
+        });
+        console.log("Generate success", payload);
+      } catch (error) {
+        console.log("Generate error", error);
+        Alert.alert("Generate failed", "Unable to reach server.");
+      } finally {
+        setIsGenerating(false);
+      }
+    }
+  };
 
   const handleSchemaTextChange = (text: string) => {
     setSchemaText(text);
@@ -48,16 +181,28 @@ export function GeneratorScreen() {
                 iconName="document"
                 value={modelFileName}
                 onChangeFileName={setModelFileName}
+                onPickAsset={setModelFile}
                 boxStyle={styles.uploadBox}
               />
               <View style={styles.inputsGroup}>
-                <Input label="Number of Rows" placeholder="100" />
-                <Input label="Batch Size" placeholder="100" />
-                <Input label="Epochs" placeholder="100" />
+                <Input label="Number of Rows" placeholder="100" value={rows} onChangeText={setRows} />
+                <Input label="Batch Size" placeholder="100" value={batchSize} onChangeText={setBatchSize} />
+                <Input label="Epochs" placeholder="100" value={epochs} onChangeText={setEpochs} />
               </View>
             </Card>
 
-            <Button label="Generate Synthetic Data" style={styles.primaryCta} />
+            <Button
+              label={isGenerating ? "Generating..." : "Generate Synthetic Data"}
+              style={styles.primaryCta}
+              onPress={handleGenerate}
+              disabled={isGenerating}
+            />
+            {generationResult ? (
+              <GenerationResultCard
+                datasetId={generationResult.dataset_id}
+                onDownload={() => handleDownload(generationResult.download_url)}
+              />
+            ) : null}
           </View>
         ) : (
           <View style={styles.section}>
@@ -74,6 +219,7 @@ export function GeneratorScreen() {
                     setSchemaText("");
                   }
                 }}
+                onPickAsset={setSchemaFile}
                 boxStyle={styles.uploadBoxLarge}
               />
               <Text style={styles.orText}> OR </Text>
@@ -87,11 +233,22 @@ export function GeneratorScreen() {
                 style={styles.schemaInput}
               />
               <View style={styles.inputsGroup}>
-                <Input label="Number of Rows" placeholder="100" />
+                <Input label="Number of Rows" placeholder="100" value={schemaRows} onChangeText={setSchemaRows} />
               </View>
             </Card>
 
-            <Button label="Generate Synthetic Data" style={styles.primaryCta} />
+            <Button
+              label={isGenerating ? "Generating..." : "Generate Synthetic Data"}
+              style={styles.primaryCta}
+              onPress={handleGenerate}
+              disabled={isGenerating}
+            />
+            {generationResult ? (
+              <GenerationResultCard
+                datasetId={generationResult.dataset_id}
+                onDownload={() => handleDownload(generationResult.download_url)}
+              />
+            ) : null}
           </View>
         )}
       </ScrollView>

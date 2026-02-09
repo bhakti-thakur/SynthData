@@ -13,6 +13,7 @@ type UploadFieldProps = {
   iconName?: React.ComponentProps<typeof Ionicons>["name"];
   value?: string | null;
   onChangeFileName?: (name: string | null) => void;
+  onPickAsset?: (asset: DocumentPicker.DocumentPickerAsset | null) => void;
   boxStyle?: StyleProp<ViewStyle>;
 };
 
@@ -22,6 +23,7 @@ export function UploadField({
   iconName,
   value,
   onChangeFileName,
+  onPickAsset,
   boxStyle,
 }: UploadFieldProps) {
   const [internalName, setInternalName] = useState<string | null>(null);
@@ -32,6 +34,9 @@ export function UploadField({
       setInternalName(name);
     }
     onChangeFileName?.(name);
+    if (name === null) {
+      onPickAsset?.(null);
+    }
   };
 
   const handlePick = async () => {
@@ -44,7 +49,9 @@ export function UploadField({
       return;
     }
 
-    setFileName(result.assets[0].name ?? "Selected file");
+    const asset = result.assets[0];
+    setFileName(asset.name ?? "Selected file");
+    onPickAsset?.(asset);
   };
 
   return (
