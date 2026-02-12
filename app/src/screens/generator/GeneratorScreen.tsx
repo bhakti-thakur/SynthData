@@ -115,13 +115,41 @@ export function GeneratorScreen() {
       }
     } else {
       const nRows = Number(schemaRows);
-      if (schemaText.trim().length === 0 || Number.isNaN(nRows)) {
+      let schemaPayload = schemaText.trim();
+      if (schemaPayload.length === 0) {
+        if (!schemaFile) {
+          Alert.alert("Missing data", "Please paste schema JSON and enter rows.");
+          return;
+        }
+        if (Platform.OS === "web") {
+          if (!schemaFile.file) {
+            console.log("Generate error", "Missing web schema file", schemaFile);
+            Alert.alert("Generate failed", "Invalid schema file selection.");
+            return;
+          }
+          schemaPayload = await schemaFile.file.text();
+        } else {
+          if (!schemaFile.uri) {
+            console.log("Generate error", "Missing schema file uri", schemaFile);
+            Alert.alert("Generate failed", "Invalid schema file selection.");
+            return;
+          }
+          const schemaUri =
+            schemaFile.uri.startsWith("file://") || schemaFile.uri.startsWith("content://")
+              ? schemaFile.uri
+              : `file://${schemaFile.uri}`;
+          const schemaResponse = await fetch(schemaUri);
+          schemaPayload = await schemaResponse.text();
+        }
+      }
+
+      if (Number.isNaN(nRows)) {
         Alert.alert("Missing data", "Please paste schema JSON and enter rows.");
         return;
       }
 
       const formData = new FormData();
-      formData.append("schema", schemaText);
+      formData.append("schema", schemaPayload);
       formData.append("n_rows", String(nRows));
 
       try {

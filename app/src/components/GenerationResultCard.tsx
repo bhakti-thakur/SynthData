@@ -36,6 +36,10 @@ const styles = StyleSheet.create({
   card: {
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.lg,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerRow: {
     flexDirection: "row",
