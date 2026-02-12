@@ -57,7 +57,6 @@ async def generate_synthetic_data(
     file: Optional[UploadFile] = File(None, description="CSV file to upload"),
     file_path: Optional[str] = Form(None, description="Path to CSV on server"),
     data_schema: Optional[str] = Form(None, description="JSON schema for schema-only generation (Mode B)"),
-    schema: Optional[str] = Form(None, description="Alias for data_schema (legacy clients)"),
     n_rows: int = Form(1000, ge=1, le=100000, description="Rows to generate"),
     epochs: int = Form(300, ge=50, le=1000, description="Training epochs"),
     batch_size: int = Form(500, ge=100, le=2000, description="Batch size"),
@@ -78,10 +77,9 @@ async def generate_synthetic_data(
     
     # ========== STEP 0: PARSE OPTIONAL SCHEMA (MODE B) ==========
     schema_definition: Optional[SchemaDefinition] = None
-    schema_payload = data_schema or schema
-    if schema_payload:
+    if data_schema:
         try:
-            schema_dict = json.loads(schema_payload)
+            schema_dict = json.loads(data_schema)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

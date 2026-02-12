@@ -86,7 +86,7 @@ Base URL: `http://localhost:8000`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
-- `schema`: JSON text (example below)
+- `data_schema`: JSON text (example below)
 - `n_rows`: `50` (number)
 
 **Schema Example (paste as text):**
@@ -312,7 +312,7 @@ Base URL: `http://localhost:8000`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
-- `schema`: (JSON text, same as TEST 3B schema example)
+- `data_schema`: (JSON text, same as TEST 3B schema example)
 - `dataset_id`: Use the ID returned from TEST 3B
 
 **Expected Response (200 OK):**
