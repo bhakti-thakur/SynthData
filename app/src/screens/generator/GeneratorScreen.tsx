@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentPickerAsset } from "expo-document-picker";
 import { Alert, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../../components/Button";
@@ -15,6 +15,7 @@ import { typography } from "../../theme/typography";
 export function GeneratorScreen() {
   const segments = useMemo(() => ["Model", "Schema"], []);
   const [activeSegment, setActiveSegment] = useState(segments[0]);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [modelFileName, setModelFileName] = useState<string | null>(null);
   const [schemaFileName, setSchemaFileName] = useState<string | null>(null);
   const [schemaText, setSchemaText] = useState("");
@@ -29,6 +30,20 @@ export function GeneratorScreen() {
     dataset_id: string;
     download_url: string;
   } | null>(null);
+
+  useEffect(() => {
+    // Reset all form fields and result when segment changes
+    setModelFile(null);
+    setModelFileName(null);
+    setSchemaFile(null);
+    setSchemaFileName(null);
+    setSchemaText("");
+    setRows("");
+    setBatchSize("");
+    setEpochs("");
+    setSchemaRows("");
+    setGenerationResult(null);
+  }, [activeSegment]);
 
   const handleDownload = async (url: string) => {
     const baseUrl = "http://localhost:8000";
@@ -106,6 +121,7 @@ export function GeneratorScreen() {
           dataset_id: payload.dataset_id,
           download_url: payload.download_url,
         });
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
         console.log("Generate success", payload);
       } catch (error) {
         console.log("Generate error", error);
@@ -168,6 +184,7 @@ export function GeneratorScreen() {
           dataset_id: payload.dataset_id,
           download_url: payload.download_url,
         });
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
         console.log("Generate success", payload);
       } catch (error) {
         console.log("Generate error", error);
@@ -187,7 +204,7 @@ export function GeneratorScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Generator</Text>
         </View>

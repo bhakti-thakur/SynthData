@@ -4,6 +4,7 @@ import { Card } from "./Card";
 import { colors } from "../theme/colors";
 import { spacing } from "../theme/spacing";
 import { typography } from "../theme/typography";
+import { Ionicons } from "@expo/vector-icons";
 
 export type StatisticalEvaluationResult = {
   message: string;
@@ -59,7 +60,11 @@ export function EvaluationResultCard({
     const data = resolvedResult as StatisticalEvaluationResult;
     return (
       <Card style={styles.card}>
-        <Text style={styles.title}>{data.message}</Text>
+        <span>
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <Text style={styles.title}>{data.message}</Text>
+        </span>
+        
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>KS Test</Text>
           {Object.entries(data.ks_test).map(([key, value]) => (
@@ -101,7 +106,10 @@ export function EvaluationResultCard({
     const data = resolvedResult as SchemaEvaluationResult;
     return (
       <Card style={styles.card}>
-        <Text style={styles.title}>{data.message}</Text>
+        <span>
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <Text style={styles.title}>{data.message}</Text>
+        </span>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Summary</Text>
           <Text style={styles.rowText}>Schema validity: {data.schema_validity}</Text>

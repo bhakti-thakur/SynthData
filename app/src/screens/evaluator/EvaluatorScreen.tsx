@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentPickerAsset } from "expo-document-picker";
 import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../../components/Button";
@@ -19,6 +19,7 @@ import { typography } from "../../theme/typography";
 export function EvaluatorScreen() {
   const segments = useMemo(() => ["Statistical", "Schema Check"], []);
   const [activeSegment, setActiveSegment] = useState(segments[0]);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [realFileName, setRealFileName] = useState<string | null>(null);
   const [syntheticFileName, setSyntheticFileName] = useState<string | null>(null);
   const [schemaFileName, setSchemaFileName] = useState<string | null>(null);
@@ -31,6 +32,19 @@ export function EvaluatorScreen() {
   const [evaluationResult, setEvaluationResult] = useState<
     StatisticalEvaluationResult | SchemaEvaluationResult | null
   >(null);
+
+  useEffect(() => {
+    // Reset all form fields and result when segment changes
+    setRealFile(null);
+    setRealFileName(null);
+    setSyntheticFile(null);
+    setSyntheticFileName(null);
+    setSchemaFile(null);
+    setSchemaFileName(null);
+    setSchemaText("");
+    setDatasetId("");
+    setEvaluationResult(null);
+  }, [activeSegment]);
 
   const handleEvaluate = async () => {
     const baseUrl = "http://localhost:8000";
@@ -123,6 +137,7 @@ export function EvaluatorScreen() {
           return;
         }
         setEvaluationResult(payload);
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
       } catch (error) {
         console.log("Evaluate error", error);
         Alert.alert("Evaluation failed", "Unable to reach server.");
@@ -222,6 +237,7 @@ export function EvaluatorScreen() {
           return;
         }
         setEvaluationResult(payload);
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
       } catch (error) {
         console.log("Evaluate error", error);
         Alert.alert("Evaluation failed", "Unable to reach server.");
@@ -233,7 +249,7 @@ export function EvaluatorScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Evaluator</Text>
         </View>

@@ -20,7 +20,7 @@ export function GenerationResultCard({
   return (
     <Card style={styles.card}>
       <View style={styles.headerRow}>
-        <Ionicons name="checkmark-circle" size={18} color={colors.textPrimary} />
+        <Ionicons name="checkmark-circle" size={18} color={colors.success} />
         <Text style={styles.headerText}>Generation Complete</Text>
       </View>
       <Text style={styles.datasetText}>Dataset ID: {datasetId}</Text>

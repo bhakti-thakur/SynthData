@@ -9,4 +9,5 @@ export const colors = {
   secondary: "#ffffff",
   danger: "#d21e1e",
   shadow: "rgba(17, 24, 39, 0.12)",
+  success: "#BCD9A2",
 };
