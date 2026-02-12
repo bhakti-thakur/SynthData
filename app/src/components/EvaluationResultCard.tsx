@@ -42,20 +42,27 @@ type EvaluationResultCardProps = {
   variant: "statistical" | "schema";
   statisticalResult?: StatisticalEvaluationResult;
   schemaResult?: SchemaEvaluationResult;
+  result?: StatisticalEvaluationResult | SchemaEvaluationResult;
 };
 
 export function EvaluationResultCard({
   variant,
   statisticalResult,
   schemaResult,
+  result,
 }: EvaluationResultCardProps) {
-  if (variant === "statistical" && statisticalResult) {
+  const resolvedResult = result ?? statisticalResult ?? schemaResult;
+  const isStatistical = Boolean((resolvedResult as StatisticalEvaluationResult | undefined)?.ks_test);
+  const isSchema = Boolean((resolvedResult as SchemaEvaluationResult | undefined)?.schema_validity);
+
+  if ((variant === "statistical" || isStatistical) && resolvedResult && isStatistical) {
+    const data = resolvedResult as StatisticalEvaluationResult;
     return (
       <Card style={styles.card}>
-        <Text style={styles.title}>{statisticalResult.message}</Text>
+        <Text style={styles.title}>{data.message}</Text>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>KS Test</Text>
-          {Object.entries(statisticalResult.ks_test).map(([key, value]) => (
+          {Object.entries(data.ks_test).map(([key, value]) => (
             <Text key={key} style={styles.rowText}>
               {key}: stat {value.statistic.toFixed(4)}, p {value.p_value.toFixed(4)}
             </Text>
@@ -63,7 +70,7 @@ export function EvaluationResultCard({
         </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chi-square</Text>
-          {Object.entries(statisticalResult.chi_square).map(([key, value]) => (
+          {Object.entries(data.chi_square).map(([key, value]) => (
             <Text key={key} style={styles.rowText}>
               {key}: stat {value.statistic.toFixed(4)}, p {value.p_value.toFixed(4)}
             </Text>
@@ -72,15 +79,15 @@ export function EvaluationResultCard({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Metrics</Text>
           <Text style={styles.rowText}>
-            Correlation MSE: {statisticalResult.correlation_mse.toFixed(4)}
+            Correlation MSE: {data.correlation_mse.toFixed(4)}
           </Text>
           <Text style={styles.rowText}>
-            Adversarial AUC: {statisticalResult.adversarial_auc.toFixed(4)}
+            Adversarial AUC: {data.adversarial_auc.toFixed(4)}
           </Text>
         </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Interpretation</Text>
-          {Object.entries(statisticalResult.interpretation).map(([key, value]) => (
+          {Object.entries(data.interpretation).map(([key, value]) => (
             <Text key={key} style={styles.rowText}>
               {value}
             </Text>
@@ -90,25 +97,26 @@ export function EvaluationResultCard({
     );
   }
 
-  if (variant === "schema" && schemaResult) {
+  if ((variant === "schema" || isSchema) && resolvedResult && isSchema) {
+    const data = resolvedResult as SchemaEvaluationResult;
     return (
       <Card style={styles.card}>
-        <Text style={styles.title}>{schemaResult.message}</Text>
+        <Text style={styles.title}>{data.message}</Text>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Summary</Text>
-          <Text style={styles.rowText}>Schema validity: {schemaResult.schema_validity}</Text>
-          <Text style={styles.rowText}>Type consistency: {schemaResult.type_consistency}</Text>
-          <Text style={styles.rowText}>Range violations: {schemaResult.range_violations}</Text>
+          <Text style={styles.rowText}>Schema validity: {data.schema_validity}</Text>
+          <Text style={styles.rowText}>Type consistency: {data.type_consistency}</Text>
+          <Text style={styles.rowText}>Range violations: {data.range_violations}</Text>
           <Text style={styles.rowText}>
-            Category violations: {schemaResult.category_violations}
+            Category violations: {data.category_violations}
           </Text>
           <Text style={styles.rowText}>
-            Identifier issues: {schemaResult.identifier_issues ?? "None"}
+            Identifier issues: {data.identifier_issues ?? "None"}
           </Text>
         </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Null rates</Text>
-          {Object.entries(schemaResult.null_rate).map(([key, value]) => (
+          {Object.entries(data.null_rate).map(([key, value]) => (
             <Text key={key} style={styles.rowText}>
               {key}: {value.toFixed(2)}
             </Text>

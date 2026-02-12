@@ -149,7 +149,7 @@ export function GeneratorScreen() {
       }
 
       const formData = new FormData();
-      formData.append("schema", schemaPayload);
+      formData.append("data_schema", schemaPayload);
       formData.append("n_rows", String(nRows));
 
       try {
