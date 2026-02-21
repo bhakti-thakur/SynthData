@@ -1,11 +1,12 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
+from uuid import UUID
 
 from pydantic import BaseModel
 
 
 class ActivityResponse(BaseModel):
-    id: str
+    id: UUID
     activity_type: str
     mode: str
     created_at: datetime
