@@ -625,8 +625,10 @@ All endpoints except `/auth/*` and `/health` require JWT Bearer token authentica
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
-- `schema`: (JSON text, same as TEST 15 schema example)
+- `data_schema`: (JSON text, same as TEST 15 schema example)
 - `dataset_id`: Use the ID returned from TEST 15
+
+**Note:** Can evaluate schema against a synthetic data file too (can also upload schema and frontend can parse schema and send it as json text)
 
 **Expected Response (200 OK):**
 ```json
