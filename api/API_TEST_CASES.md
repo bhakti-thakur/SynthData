@@ -1,10 +1,24 @@
 # SynthData API Test Cases for Testing API
 
+**Updated for JWT Authentication with Refresh Tokens**
+
 Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 1: Health Check
+## PREREQUISITE: Authentication Setup
+
+All endpoints except `/auth/*` and `/health` require JWT Bearer token authentication.
+
+**Token Flow:**
+1. Register or Login to get `access_token` + `refresh_token`
+2. Use `access_token` in `Authorization: Bearer {token}` header
+3. When access token expires (30 min), use `refresh_token` at `/auth/refresh` to get new tokens
+4. Logout clears refresh token from DB
+
+---
+
+## TEST 1: Health Check (No Auth Required)
 
 **Endpoint:** `GET /health`
 
@@ -23,7 +37,7 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 2: Root Endpoint
+## TEST 2: Root Endpoint (No Auth Required)
 
 **Endpoint:** `GET /`
 
@@ -37,6 +51,7 @@ Base URL: `http://localhost:8000`
   "name": "SynthData API",
   "version": "1.0.0",
   "endpoints": {
+    "auth": "/auth",
     "generate": "/generate",
     "evaluate": "/evaluate",
     "health": "/health"
@@ -46,18 +61,297 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 3: Generate Synthetic Data (File Upload)
+## TEST 3: Register New User
+
+**Endpoint:** `POST /auth/register`
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword123"
+}
+```
+
+**Expected Response (201 Created):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+**Save `refresh_token` for TEST 7 (logout test)**
+
+---
+
+## TEST 4: Login with Email/Password
+
+**Endpoint:** `POST /auth/login`
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword123"
+}
+```
+
+**Expected Response (200 OK):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+**Note:** 
+- Password must be at least 8 characters
+- Each login generates a NEW refresh token (single-device login enforced)
+- Previous device's refresh token becomes invalid
+
+---
+
+## TEST 5: Google OAuth Login
+
+**Endpoint:** `POST /auth/google`
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "id_token": "GOOGLE_ID_TOKEN_HERE"
+}
+```
+
+**Expected Response (200 OK):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+**Note:** 
+- Requires valid Google ID token (get from Google SDK)
+- Email must be present in token
+- Auto-creates user account if doesn't exist
+
+---
+
+## TEST 6: Refresh Access Token
+
+**Endpoint:** `POST /auth/refresh`
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Expected Response (200 OK):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+**Security Notes:**
+- Old refresh token becomes invalid immediately (token rotation)
+- Returns new access + refresh tokens
+- Expires after 7 days of inactivity (exp claim in JWT)
+- Malformed/invalid/expired token → 401 Unauthorized
+
+---
+
+## TEST 7: Logout (Clear Refresh Token)
+
+**Endpoint:** `POST /auth/logout`
+
+**Headers:** 
+- Authorization: `Bearer {access_token}`
+- Content-Type: `application/json`
+
+**Body:** Empty JSON `{}`
+
+**Expected Response (200 OK):**
+```json
+{
+  "message": "Successfully logged out"
+}
+```
+
+**After Logout:**
+- Access token still valid for ~30 minutes
+- Refresh token becomes invalid immediately
+- Cannot refresh again unless login again
+- Cannot use endpoints requiring auth after token expires
+
+---
+
+## TEST 8: Invalid Login Credentials
+
+**Endpoint:** `POST /auth/login`
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "email": "user@example.com",
+  "password": "wrongpassword"
+}
+```
+
+**Expected Response (401 Unauthorized):**
+```json
+{
+  "detail": "Invalid credentials"
+}
+```
+
+---
+
+## TEST 9: Duplicate Email Registration
+
+**Endpoint:** `POST /auth/register`
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "email": "user@example.com",
+  "password": "anotherpassword123"
+}
+```
+
+**Expected Response (400 Bad Request):**
+```json
+{
+  "detail": "Email already registered"
+}
+```
+
+---
+
+## TEST 10: Invalid Refresh Token
+
+**Endpoint:** `POST /auth/refresh`
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "refresh_token": "invalid-token-string"
+}
+```
+
+**Expected Response (401 Unauthorized):**
+```json
+{
+  "detail": "Invalid or expired refresh token"
+}
+```
+
+---
+
+## TEST 11: Refresh After Logout
+
+**Endpoint:** `POST /auth/refresh`
+
+**Prerequisites:** Must have called TEST 7 (logout) first
+
+**Headers:** 
+- Content-Type: `application/json`
+
+**Body (Raw JSON):**
+```json
+{
+  "refresh_token": "the-token-you-saved-before-logout"
+}
+```
+
+**Expected Response (401 Unauthorized):**
+```json
+{
+  "detail": "Invalid refresh token"
+}
+```
+
+**Reason:** Logout sets `refresh_token_hash = None`, making token invalid
+
+---
+
+## TEST 12: Missing Authorization Header
+
+**Endpoint:** `POST /generate` (any authenticated endpoint)
+
+**Headers:** None
+
+**Body:** Form-Data with file
+
+**Expected Response (403 Forbidden):**
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+---
+
+## TEST 13: Expired/Invalid Access Token
+
+**Endpoint:** `POST /generate` (any authenticated endpoint)
+
+**Headers:** 
+- Authorization: `Bearer invalid-or-expired-token`
+
+**Body:** Form-Data with file
+
+**Expected Response (401 Unauthorized):**
+```json
+{
+  "detail": "Invalid authentication token"
+}
+```
+
+---
+
+## TEST 14: Generate Synthetic Data (File Upload)
 
 **Endpoint:** `POST /generate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data` (auto-set by Hoppscotch)
 
 **Body (Form-Data):**
 - `file`: **FILE UPLOAD** - Select your CSV file (e.g., `input.csv` or `synthetic_output.csv`)
 - `n_rows`: `100` (number, 1-100000)
 - `epochs`: `100` (number)
-- `batch_size`: `100` (number, minimum 100)
+- `batch_size`: `100` (number, minimum 100) (can not be ODD (rule applied by CT GAN lib))
 - `apply_constraints`: `true` (boolean)
 
 **Expected Response (201 Created):**
@@ -76,17 +370,24 @@ Base URL: `http://localhost:8000`
 }
 ```
 
+**Note:** 
+- Requires valid access token
+- Activity is logged in user's history
+- Dataset is linked to user account
+- Generated dataset will download only if you send bearer token isnide the get request 
+
 ---
 
-## TEST 3B: Generate Synthetic Data (Schema-Only, Mode B)
+## TEST 15: Generate Synthetic Data (Schema-Only, Mode B)
 
 **Endpoint:** `POST /generate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
-- `schema`: JSON text (example below)
+- `data_schema`: JSON text (example below)
 - `n_rows`: `50` (number)
 
 **Schema Example (paste as text):**
@@ -120,11 +421,12 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 4: Generate - File Path (Alternative Method)
+## TEST 16: Generate - File Path (Alternative Method)
 
 **Endpoint:** `POST /generate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -150,11 +452,12 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 5: Generate - Invalid (No File or Path)
+## TEST 17: Generate - Invalid (No File or Path)
 
 **Endpoint:** `POST /generate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -169,11 +472,12 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 6: Generate - Invalid n_rows (Too Large)
+## TEST 18: Generate - Invalid n_rows (Too Large)
 
 **Endpoint:** `POST /generate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -197,11 +501,12 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 7: Generate - File Not Found
+## TEST 19: Generate - File Not Found
 
 **Endpoint:** `POST /generate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -217,13 +522,14 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 8: Download Generated Dataset
+## TEST 20: Download Generated Dataset
 
 **Endpoint:** `GET /generate/download/{dataset_id}`
 
 **Example:** `GET /generate/download/synth_20260108_143052_a1b2c3`
 
-**Headers:** None required
+**Headers:** 
+- Authorization: `Bearer {access_token}`
 
 **Body:** None
 
@@ -233,13 +539,16 @@ Base URL: `http://localhost:8000`
 - Headers: `customer_id,age,income,gender,region`
 - 100+ rows of data
 
+**Note:** Only dataset owner can download their datasets
+
 ---
 
-## TEST 9: Download - Invalid Dataset ID
+## TEST 21: Download - Invalid Dataset ID
 
 **Endpoint:** `GET /generate/download/nonexistent-id`
 
-**Headers:** None required
+**Headers:** 
+- Authorization: `Bearer {access_token}`
 
 **Body:** None
 
@@ -252,11 +561,12 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 10: Evaluate - Both Files Uploaded
+## TEST 22: Evaluate - Both Files Uploaded
 
 **Endpoint:** `POST /evaluate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -302,18 +612,21 @@ Base URL: `http://localhost:8000`
 }
 ```
 
+**Note:** Activity is logged in user's history
+
 ---
 
-## TEST 10B: Evaluate - Schema-Only (Mode B)
+## TEST 23: Evaluate - Schema-Only (Mode B)
 
 **Endpoint:** `POST /evaluate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
-- `schema`: (JSON text, same as TEST 3B schema example)
-- `dataset_id`: Use the ID returned from TEST 3B
+- `schema`: (JSON text, same as TEST 15 schema example)
+- `dataset_id`: Use the ID returned from TEST 15
 
 **Expected Response (200 OK):**
 ```json
@@ -335,38 +648,40 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 11: Evaluate - Using Dataset ID
+## TEST 24: Evaluate - Using Dataset ID
 
-**Prerequisite:** First run TEST 3 to generate synthetic data and get `dataset_id`
+**Prerequisite:** First run TEST 14 to generate synthetic data and get `dataset_id`
 
 **Endpoint:** `POST /evaluate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
 - `real_file`: Upload real CSV (e.g., `input.csv`)
-- `dataset_id`: `synth_20260108_143052_a1b2c3` (text - use ID from TEST 3)
+- `dataset_id`: `synth_20260108_143052_a1b2c3` (text - use ID from TEST 14)
 
 **Expected Response (200 OK):**
 ```json
 {
   "message": "Evaluation completed successfully",
-  "ks_test": { /* same structure as TEST 10 */ },
-  "chi_square": { /* same structure as TEST 10 */ },
+  "ks_test": { /* same structure as TEST 22 */ },
+  "chi_square": { /* same structure as TEST 22 */ },
   "correlation_mse": 0.002345,
   "adversarial_auc": 0.5234,
-  "interpretation": { /* same structure as TEST 10 */ }
+  "interpretation": { /* same structure as TEST 22 */ }
 }
 ```
 
 ---
 
-## TEST 12: Evaluate - Missing Real File
+## TEST 25: Evaluate - Missing Real File
 
 **Endpoint:** `POST /evaluate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -381,11 +696,12 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 13: Evaluate - Missing Synthetic Source
+## TEST 26: Evaluate - Missing Synthetic Source
 
 **Endpoint:** `POST /evaluate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -400,11 +716,12 @@ Base URL: `http://localhost:8000`
 
 ---
 
-## TEST 14: Evaluate - Invalid Dataset ID
+## TEST 27: Evaluate - Invalid Dataset ID
 
 **Endpoint:** `POST /evaluate`
 
 **Headers:** 
+- Authorization: `Bearer {access_token}`
 - Content-Type: `multipart/form-data`
 
 **Body (Form-Data):**
@@ -420,16 +737,112 @@ Base URL: `http://localhost:8000`
 
 ---
 
+## TEST 28: View Activity History
+
+**Endpoint:** `GET /history`
+
+**Headers:** 
+- Authorization: `Bearer {access_token}`
+
+**Body:** None
+
+**Expected Response (200 OK):**
+```json
+{
+  "activities": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "user_id": "user-uuid-here",
+      "activity_type": "generate",
+      "mode": "file",
+      "input_metadata": {
+        "file": "input.csv",
+        "n_rows": 100,
+        "epochs": 100
+      },
+      "result_snapshot": {
+        "dataset_id": "synth_20260108_143052_a1b2c3",
+        "rows_generated": 100,
+        "columns": ["customer_id", "age", "income", "gender", "region"]
+      },
+      "created_at": "2026-02-21T10:30:45.123456+00:00"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "user_id": "user-uuid-here",
+      "activity_type": "evaluate",
+      "mode": "statistical",
+      "input_metadata": {
+        "real_file": "input.csv",
+        "synthetic_file": "synthetic_output.csv"
+      },
+      "result_snapshot": {
+        "correlation_mse": 0.002345,
+        "adversarial_auc": 0.5234
+      },
+      "created_at": "2026-02-21T10:35:20.654321+00:00"
+    }
+  ]
+}
+```
+
+**Note:** Shows all activities for authenticated user
+
+---
+
+## TEST 29: View Activity by ID
+
+**Endpoint:** `GET /history/{activity_id}`
+
+**Example:** `GET /history/550e8400-e29b-41d4-a716-446655440000`
+
+**Headers:** 
+- Authorization: `Bearer {access_token}`
+
+**Body:** None
+
+**Expected Response (200 OK):**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "user_id": "user-uuid-here",
+  "activity_type": "generate",
+  "mode": "file",
+  "input_metadata": {
+    "file": "input.csv",
+    "n_rows": 100,
+    "epochs": 100
+  },
+  "result_snapshot": {
+    "dataset_id": "synth_20260108_143052_a1b2c3",
+    "rows_generated": 100,
+    "columns": ["customer_id", "age", "income", "gender", "region"]
+  },
+  "created_at": "2026-02-21T10:30:45.123456+00:00"
+}
+```
+
+---
+
 ## FULL WORKFLOW TEST
 
-### Step 1: Generate
-`POST /generate` with `input.csv` file → Get `dataset_id`
+### Step 1: Register/Login
+`POST /auth/register` or `POST /auth/login` → Get `access_token` + `refresh_token`
 
-### Step 2: Download
-`GET /generate/download/{dataset_id}` → Download CSV
+### Step 2: Generate
+`POST /generate` with Authorization header → Get `dataset_id`
 
-### Step 3: Evaluate
-`POST /evaluate` with `real_file` + `dataset_id` → Get quality metrics
+### Step 3: Download
+`GET /generate/download/{dataset_id}` with Authorization header → Download CSV
+
+### Step 4: Evaluate
+`POST /evaluate` with Authorization header → Get quality metrics
+
+### Step 5: View History
+`GET /history` with Authorization header → See all activities
+
+### Step 6: Logout
+`POST /auth/logout` with Authorization header → Clear refresh token
 
 ---
 
@@ -437,20 +850,28 @@ Base URL: `http://localhost:8000`
 
 1. **Open Hoppscotch:** https://hoppscotch.io/
 2. **Set Base URL:** `http://localhost:8000`
-3. **For File Uploads:**
+3. **For JWT Auth:**
+   - Copy `access_token` from login/register response
+   - In Authorization tab, select "Bearer Token"
+   - Paste token in the field
+4. **For File Uploads:**
    - Select "Body" tab
    - Choose "Multipart Form"
    - Add fields with types (Text, File, Number)
-4. **Run Tests:** Copy the endpoint, method, and body from above
-5. **Check Response:** Verify status code and response body match expected output
+5. **Run Tests:** Copy endpoint, method, and body from above
+6. **Check Response:** Verify status code and response body match expected output
 
 ---
 
 ## Tips
 
-- **Start with TEST 1** (Health Check) to verify server is running
-- **Save `dataset_id`** from TEST 3 for use in TEST 8, 11, 14
+- **Start with TEST 3** (Register) to get access token
+- **Always include Authorization header** (except health/auth endpoints)
+- **Save tokens** from registration/login for subsequent tests
+- **Token expiration:** Access token = 30 minutes, Refresh token = 7 days
+- **Use TEST 6** to refresh access token after 30 minutes
+- **Use TEST 7** to logout and clear refresh token
 - **File paths** must use forward slashes or double backslashes on Windows
 - **Generation takes 30-60 seconds** depending on epochs and data size
 - **Evaluation takes 10-20 seconds** for statistical tests
-- **Use Swagger UI** alternative: http://localhost:8000/docs
+- **Use Swagger UI** alternative: http://localhost:8000/docs (includes auth form)

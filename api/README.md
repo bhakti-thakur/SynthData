@@ -32,7 +32,49 @@ cd api
 pip install -r requirements.txt
 ```
 
-### 2. Run the Server
+### 2. Set Environment Variables
+
+Create a local env file from the template:
+
+```bash
+cd api
+copy .env.example .env
+```
+
+Required variables:
+
+- DATABASE_URL
+- SECRET_KEY
+- GOOGLE_CLIENT_ID
+
+Example DATABASE_URL format:
+
+```text
+postgresql+psycopg2://username:password@host:5432/database_name
+```
+
+If you use PowerShell and want temporary values for a single session:
+
+```powershell
+$env:DATABASE_URL="postgresql+psycopg2://postgres:postgres@localhost:5432/synthdata"
+$env:SECRET_KEY="change_me_to_a_long_random_secret"
+$env:GOOGLE_CLIENT_ID="your_google_client_id.apps.googleusercontent.com"
+```
+
+### 3. Prepare PostgreSQL
+
+1. Ensure PostgreSQL server is running.
+2. Create the target database used in DATABASE_URL.
+
+Example with psql:
+
+```sql
+CREATE DATABASE synthdata;
+```
+
+No manual table creation is required. Tables are auto-created at startup using SQLAlchemy metadata.
+
+### 4. Run the Server
 
 ```bash
 # From the api/ directory
@@ -42,11 +84,49 @@ python main.py
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. Test in Browser
+### 5. Test in Browser
 
 Open: **http://localhost:8000/docs**
 
 You'll see Swagger UI with interactive API documentation.
+
+---
+
+## 🗃️ Database Schema (PostgreSQL)
+
+### users
+
+- id: UUID (primary key)
+- email: string (unique, indexed, required)
+- hashed_password: string (nullable for Google users)
+- is_google_user: boolean (required, default false)
+- created_at: timestamptz (server default now)
+
+### user_activities
+
+- id: UUID (primary key)
+- user_id: UUID (foreign key to users.id, indexed)
+- activity_type: string (required)
+- mode: string (required)
+- created_at: timestamptz (server default now)
+- dataset_id: string (nullable)
+- input_metadata: JSONB (nullable)
+- result_snapshot: JSONB (nullable)
+- download_url: string (nullable)
+
+---
+
+## ✅ Prerequisite Verification Checklist
+
+1. PostgreSQL reachable from this machine.
+2. DATABASE_URL points to an existing database.
+3. SECRET_KEY is set and non-empty.
+4. GOOGLE_CLIENT_ID is set.
+5. API starts without runtime env errors.
+6. /docs is accessible.
+7. Register/Login returns bearer token.
+8. /generate and /evaluate work with Authorization header.
+9. /history returns activities for authenticated user.
 
 ---
 

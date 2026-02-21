@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Optional, Union
 
 import pandas as pd
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
+from sqlalchemy.orm import Session
 
 # Add engine to Python path (non-invasive)
 # sys.path.insert(0, str(Path(__file__).parent.parent.parent / "engine"))
@@ -24,6 +25,9 @@ from engine.evaluation.adversarial import evaluate_adversarial_detectability
 from engine.evaluation.schema_consistency import evaluate_schema_consistency
 
 from api.config import config
+from api.core.activity import log_activity
+from api.core.security import get_current_user
+from api.db.session import get_db
 from api.schemas.requests import (
     EvaluateResponse,
     SchemaEvaluateResponse,
@@ -62,7 +66,9 @@ async def evaluate_synthetic_data(
     real_file_path: Optional[str] = Form(None, description="Path to real CSV"),
     synthetic_file_path: Optional[str] = Form(None, description="Path to synthetic CSV"),
     dataset_id: Optional[str] = Form(None, description="Dataset ID from /generate"),
-    data_schema: Optional[str] = Form(None, description="JSON schema for schema-only evaluation (Mode B)")
+    data_schema: Optional[str] = Form(None, description="JSON schema for schema-only evaluation (Mode B)"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ) -> Union[EvaluateResponse, SchemaEvaluateResponse]:
     """
     Evaluate synthetic data quality.
@@ -253,7 +259,31 @@ async def evaluate_synthetic_data(
                 detail=f"Error running schema evaluation: {str(e)}"
             )
 
-        return SchemaEvaluateResponse(**schema_result)
+        response = SchemaEvaluateResponse(**schema_result)
+
+        log_activity(
+            db,
+            user_id=current_user.id,
+            activity_type="evaluate",
+            mode="schema",
+            dataset_id=dataset_id,
+            input_metadata={
+                "has_schema": True,
+                "has_synthetic_file": synthetic_file is not None,
+                "synthetic_file_path": synthetic_file_path,
+                "dataset_id": dataset_id,
+            },
+            result_snapshot={
+                "schema_validity": response.schema_validity,
+                "type_consistency": response.type_consistency,
+                "range_violations": response.range_violations,
+                "category_violations": response.category_violations,
+                "identifier_issues": response.identifier_issues,
+            },
+            download_url=None,
+        )
+
+        return response
     
     # ========== STEP 3: INFER SCHEMA ==========
     
@@ -297,7 +327,7 @@ async def evaluate_synthetic_data(
     
     interpretation = _generate_interpretation(stats, auc)
     
-    return EvaluateResponse(
+    response = EvaluateResponse(
         ks_test=ks_results,
         chi_square=chi_results,
         correlation_mse=stats["correlation_mse"],
@@ -305,6 +335,28 @@ async def evaluate_synthetic_data(
         message="Evaluation completed successfully",
         interpretation=interpretation
     )
+
+    log_activity(
+        db,
+        user_id=current_user.id,
+        activity_type="evaluate",
+        mode="statistical",
+        dataset_id=dataset_id,
+        input_metadata={
+            "has_real_file": real_file is not None,
+            "real_file_path": real_file_path,
+            "has_synthetic_file": synthetic_file is not None,
+            "synthetic_file_path": synthetic_file_path,
+            "dataset_id": dataset_id,
+        },
+        result_snapshot={
+            "correlation_mse": response.correlation_mse,
+            "adversarial_auc": response.adversarial_auc,
+        },
+        download_url=None,
+    )
+
+    return response
 
 
 def _generate_interpretation(stats: dict, auc: float) -> dict:
