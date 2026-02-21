@@ -141,8 +141,22 @@ async def generate_synthetic_data(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Schema validation failed: {str(e)}"
             )
-        
-        # Mode B: schema_definition will be used later for generation without file
+
+        try:
+            print("[DEBUG] Calling schema generation engine...")
+            generator = SchemaDataGenerator(seed=schema_definition.seed)
+            df_synthetic = generator.generate(schema_definition.dict(), n_rows=n_rows)
+            df_synth = df_synthetic
+            print("[DEBUG] Generated DataFrame type:", type(df_synth))
+            print(
+                "[DEBUG] Generated DataFrame shape:",
+                df_synth.shape if df_synth is not None else None,
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Schema generation failed: {str(e)}"
+            )
 
     # ========== MODE A: DATA-DRIVEN (UNCHANGED) ==========
     elif has_file or has_file_path:
@@ -242,23 +256,12 @@ async def generate_synthetic_data(
                 detail=f"Error generating synthetic data: {str(e)}"
             )
 
-    # ========== MODE B: SCHEMA-ONLY GENERATION ==========
+    # ========== FALLBACK: INVALID INPUT COMBINATION ==========
     else:
-        try:
-            print("[DEBUG] Calling schema generation engine...")
-            generator = SchemaDataGenerator(seed=schema_definition.seed)
-            df_synthetic = generator.generate(schema_definition.dict(), n_rows=n_rows)
-            df_synth = df_synthetic
-            print("[DEBUG] Generated DataFrame type:", type(df_synth))
-            print(
-                "[DEBUG] Generated DataFrame shape:",
-                df_synth.shape if df_synth is not None else None,
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Schema generation failed: {str(e)}"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide one of: 'data_schema', 'file', or 'file_path'"
+        )
 
     df_synth = df_synthetic
     if df_synth is None or (hasattr(df_synth, "empty") and df_synth.empty):
