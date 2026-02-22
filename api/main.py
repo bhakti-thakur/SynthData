@@ -10,13 +10,20 @@ Architecture:
 - Clean separation of concerns
 """
 
+# Load environment variables FIRST, before any other imports
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api.config import config
 from api.schemas.requests import HealthResponse, ErrorResponse
-from api.routes import generate, evaluate
+from api.routes import auth, evaluate, generate, history
+from api import models  # noqa: F401
+from api.db.base import Base
+from api.db.session import engine
 
 # import sys
 import os
@@ -57,8 +64,10 @@ app.add_middleware(
 
 # ========== INCLUDE ROUTERS ==========
 
+app.include_router(auth.router)
 app.include_router(generate.router)
 app.include_router(evaluate.router)
+app.include_router(history.router)
 
 
 # ========== HEALTH CHECK ENDPOINT ==========
@@ -147,6 +156,8 @@ async def startup_event():
     - Setting up directories
     """
     os.makedirs(config.DATA_DIR, exist_ok=True)
+
+    Base.metadata.create_all(bind=engine)
 
     print(f"🚀 {config.APP_TITLE} v{config.APP_VERSION} is starting...")
     print(f"📁 Data directory: {config.DATA_DIR}")

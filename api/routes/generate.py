@@ -8,12 +8,14 @@ Calls the existing engine without modifying core logic.
 import sys
 import uuid
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
 
 # Add engine to Python path (non-invasive)
 # sys.path.insert(0, str(Path(__file__).parent.parent.parent / "engine"))
@@ -23,10 +25,14 @@ from engine.generation.generator import SynthDataEngine
 from engine.schema_generator.generator import SchemaDataGenerator
 
 from api.config import config
+from api.core.activity import log_activity
+from api.core.security import get_current_user
+from api.db.session import get_db
 from api.schemas.requests import GenerateResponse, SchemaDefinition
 
 
 router = APIRouter(prefix="/generate", tags=["Generation"])
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -61,7 +67,9 @@ async def generate_synthetic_data(
     epochs: int = Form(300, ge=50, le=1000, description="Training epochs"),
     batch_size: int = Form(500, ge=100, le=2000, description="Batch size"),
     categorical_threshold: int = Form(10, ge=2, le=50, description="Categorical threshold"),
-    apply_constraints: bool = Form(True, description="Apply post-processing")
+    apply_constraints: bool = Form(True, description="Apply post-processing"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ) -> GenerateResponse:
     """
     Generate synthetic data endpoint.
@@ -74,12 +82,53 @@ async def generate_synthetic_data(
     5. Save output CSV
     6. Return metadata (dataset_id, download URL, etc.)
     """
+    print("[DEBUG] Entered /generate endpoint")
     
-    # ========== STEP 0: PARSE OPTIONAL SCHEMA (MODE B) ==========
+    # ========== STEP 0: VALIDATE INPUT MODE ==========
+    # Three mutually exclusive modes:
+    # Mode B: schema-only generation (data_schema provided)
+    # Mode A: file-based generation (file or file_path provided)
+    # Anything else: error
+    
     schema_definition: Optional[SchemaDefinition] = None
-    if data_schema:
+    has_schema = data_schema is not None
+    has_file = file is not None
+    has_file_path = file_path is not None
+    print(
+        "[DEBUG] Parsed form fields:",
+        {
+            "data_schema_provided": has_schema,
+            "file_provided": has_file,
+            "file_path_provided": has_file_path,
+            "n_rows": n_rows,
+            "current_user_id": str(current_user.id),
+        },
+    )
+    
+    # Count how many input methods provided
+    input_count = sum([has_schema, has_file, has_file_path])
+    
+    if input_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide one of: 'data_schema' (JSON for Mode B), 'file' (CSV upload), or 'file_path' (CSV path)"
+        )
+    
+    if input_count > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide only one input method: either 'data_schema' OR 'file' OR 'file_path', not multiple"
+        )
+    
+    df_real: Optional[pd.DataFrame] = None
+    df_synthetic: Optional[pd.DataFrame] = None
+
+    # ========== MODE B: SCHEMA-ONLY (NEW) ==========
+    if has_schema:
+        # Parse and validate schema JSON
         try:
             schema_dict = json.loads(data_schema)
+            print("[DEBUG] Parsed schema:", schema_dict)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -93,18 +142,24 @@ async def generate_synthetic_data(
                 detail=f"Schema validation failed: {str(e)}"
             )
 
-    # Prevent mixing modes to keep Mode A behavior untouched.
-    if schema_definition and (file is not None or file_path is not None):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provide either schema or file/file_path, not both"
-        )
-
-    df_real: Optional[pd.DataFrame] = None
-    df_synthetic: Optional[pd.DataFrame] = None
+        try:
+            print("[DEBUG] Calling schema generation engine...")
+            generator = SchemaDataGenerator(seed=schema_definition.seed)
+            df_synthetic = generator.generate(schema_definition.dict(), n_rows=n_rows)
+            df_synth = df_synthetic
+            print("[DEBUG] Generated DataFrame type:", type(df_synth))
+            print(
+                "[DEBUG] Generated DataFrame shape:",
+                df_synth.shape if df_synth is not None else None,
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Schema generation failed: {str(e)}"
+            )
 
     # ========== MODE A: DATA-DRIVEN (UNCHANGED) ==========
-    if schema_definition is None:
+    elif has_file or has_file_path:
         # Step 1: Load input data
         if file is not None:
             if not config.validate_file_extension(file.filename):
@@ -172,6 +227,7 @@ async def generate_synthetic_data(
                 verbose=True  # keep logging for Mode A
             )
         except Exception as e:
+            logger.exception("Failed to initialize SynthDataEngine")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error initializing engine: {str(e)}"
@@ -181,6 +237,7 @@ async def generate_synthetic_data(
         try:
             engine.fit(df_real)
         except Exception as e:
+            logger.exception("CTGAN training failed during engine.fit")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error training model: {str(e)}"
@@ -193,22 +250,23 @@ async def generate_synthetic_data(
                 apply_constraints=apply_constraints
             )
         except Exception as e:
+            logger.exception("Synthetic data generation failed during engine.generate")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error generating synthetic data: {str(e)}"
             )
 
-    # ========== MODE B: SCHEMA-ONLY GENERATION ==========
+    # ========== FALLBACK: INVALID INPUT COMBINATION ==========
     else:
-        try:
-            generator = SchemaDataGenerator(seed=schema_definition.seed)
-            df_synthetic = generator.generate(schema_definition.dict(), n_rows=n_rows)
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Schema generation failed: {str(e)}"
-            )
-    
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide one of: 'data_schema', 'file', or 'file_path'"
+        )
+
+    df_synth = df_synthetic
+    if df_synth is None or (hasattr(df_synth, "empty") and df_synth.empty):
+        print("[DEBUG ERROR] df_synth is None or empty!")
+
     if df_synthetic is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -222,8 +280,10 @@ async def generate_synthetic_data(
     output_path = config.get_output_path(dataset_id)
     
     try:
+        print("[DEBUG] Saving file to path:", output_path)
         df_synthetic.to_csv(output_path, index=False)
         file_size = output_path.stat().st_size
+        print("[DEBUG] File saved successfully")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -232,7 +292,7 @@ async def generate_synthetic_data(
     
     # ========== STEP 6: RETURN METADATA ==========
     
-    return GenerateResponse(
+    response = GenerateResponse(
         dataset_id=dataset_id,
         rows_generated=len(df_synthetic),
         columns=df_synthetic.columns.tolist(),
@@ -240,6 +300,32 @@ async def generate_synthetic_data(
         download_url=f"/generate/download/{dataset_id}",
         message="Synthetic data generated successfully"
     )
+
+    log_activity(
+        db,
+        user_id=current_user.id,
+        activity_type="generate",
+        mode="schema" if schema_definition else "model",
+        dataset_id=dataset_id,
+        input_metadata={
+            "n_rows": n_rows,
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "categorical_threshold": categorical_threshold,
+            "apply_constraints": apply_constraints,
+            "has_schema": schema_definition is not None,
+            "file_name": file.filename if file else None,
+            "file_path": file_path,
+        },
+        result_snapshot={
+            "rows_generated": response.rows_generated,
+            "columns": response.columns,
+            "file_size_bytes": response.file_size_bytes,
+        },
+        download_url=response.download_url,
+    )
+
+    return response
 
 
 @router.get(
