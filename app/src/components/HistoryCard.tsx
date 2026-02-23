@@ -25,19 +25,21 @@ export function HistoryCard({
           <Ionicons name="server" size={20} color={colors.textPrimary} />
           <Text style={styles.title}>{id}</Text>
         </View>
-        <Pressable onPress={onDownload} style={styles.downloadButton}>
-          <Ionicons name="download" size={18} color={colors.textPrimary} />
-        </Pressable>
+        {onDownload ? (
+          <Pressable onPress={onDownload} style={styles.downloadButton}>
+            <Ionicons name="download" size={18} color={colors.textPrimary} />
+          </Pressable>
+        ) : null}
       </View>
       <Text style={styles.timestamp}>{timestamp}</Text>
       <View style={styles.mappingRow}>
         <View style={styles.mappingBlock}>
-          <Text style={styles.mappingLabel}>Source:</Text>
+          <Text style={styles.mappingLabel}>Activity:</Text>
           <Text style={styles.mappingValue}>{source}</Text>
         </View>
-        <Ionicons name="arrow-forward" size={18} color={colors.textPrimary} />
+        {/* <Ionicons name="arrow-forward" size={18} color={colors.textPrimary} /> */}
         <View style={styles.mappingBlock}>
-          <Text style={styles.mappingLabel}>Output:</Text>
+          <Text style={styles.mappingLabel}>Output ID:</Text>
           <Text style={styles.mappingValue}>{output}</Text>
         </View>
       </View>

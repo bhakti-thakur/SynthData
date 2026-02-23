@@ -6,6 +6,10 @@ import {
   Poppins_600SemiBold,
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
+import { initializeApiClient } from "../src/api/client";
+import { AuthProvider } from "../src/context/AuthContext";
+
+initializeApiClient();
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -19,5 +23,9 @@ export default function RootLayout() {
     return null;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <AuthProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </AuthProvider>
+  );
 }

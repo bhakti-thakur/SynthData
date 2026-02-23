@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentPickerAsset } from "expo-document-picker";
-import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { evaluate } from "../../api/content";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import {
@@ -47,203 +48,38 @@ export function EvaluatorScreen() {
   }, [activeSegment]);
 
   const handleEvaluate = async () => {
-    const baseUrl = "http://localhost:8000";
     console.log("handleEvaluate called, activeSegment:", activeSegment);
     if (isEvaluating) {
       return;
     }
 
-    if (activeSegment === "Statistical") {
-      console.log("Statistical mode - realFile:", realFile, "syntheticFile:", syntheticFile, "datasetId:", datasetId);
-      if (!realFile) {
-        Alert.alert("Missing data", "Please upload a real dataset.");
-        return;
-      }
-      if (!syntheticFile && datasetId.trim().length === 0) {
-        Alert.alert("Missing data", "Please upload a synthetic dataset or enter dataset ID.");
-        return;
-      }
-
-      const formData = new FormData();
-
-      if (Platform.OS === "web") {
-        if (!realFile.file) {
-          console.log("Evaluate error", "Missing web real file", realFile);
-          Alert.alert("Evaluation failed", "Invalid real file selection.");
-          return;
-        }
-        formData.append("real_file", realFile.file);
-      } else {
-        if (!realFile.uri || !realFile.name || !realFile.mimeType) {
-          console.log("Evaluate error", "Missing real file metadata", realFile);
-          Alert.alert("Evaluation failed", "Invalid real file selection.");
-          return;
-        }
-        const realUri =
-          realFile.uri.startsWith("file://") || realFile.uri.startsWith("content://")
-            ? realFile.uri
-            : `file://${realFile.uri}`;
-        formData.append(
-          "real_file",
-          {
-            uri: realUri,
-            name: realFile.name,
-            type: realFile.mimeType,
-          } as any,
-        );
-      }
-
-      if (syntheticFile) {
-        if (Platform.OS === "web") {
-          if (!syntheticFile.file) {
-            console.log("Evaluate error", "Missing web synthetic file", syntheticFile);
-            Alert.alert("Evaluation failed", "Invalid synthetic file selection.");
-            return;
-          }
-          formData.append("synthetic_file", syntheticFile.file);
-        } else {
-          if (!syntheticFile.uri || !syntheticFile.name || !syntheticFile.mimeType) {
-            console.log("Evaluate error", "Missing synthetic file metadata", syntheticFile);
-            Alert.alert("Evaluation failed", "Invalid synthetic file selection.");
-            return;
-          }
-          const synthUri =
-            syntheticFile.uri.startsWith("file://") || syntheticFile.uri.startsWith("content://")
-              ? syntheticFile.uri
-              : `file://${syntheticFile.uri}`;
-          formData.append(
-            "synthetic_file",
-            {
-              uri: synthUri,
-              name: syntheticFile.name,
-              type: syntheticFile.mimeType,
-            } as any,
-          );
-        }
-      } else if (datasetId.trim().length > 0) {
-        formData.append("dataset_id", datasetId.trim());
-      }
-
-      try {
-        setIsEvaluating(true);
-        const response = await fetch(`${baseUrl}/evaluate`, {
-          method: "POST",
-          body: formData,
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          console.log("Evaluate error", payload);
-          Alert.alert("Evaluation failed", payload?.detail ?? "Request failed");
-          return;
-        }
-        setEvaluationResult(payload);
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-      } catch (error) {
-        console.log("Evaluate error", error);
-        Alert.alert("Evaluation failed", "Unable to reach server.");
-      } finally {
-        setIsEvaluating(false);
-      }
-    } else {
-      console.log(
-        "Schema Check mode - schemaFile:",
-        schemaFile,
-        "schemaText length:",
-        schemaText.length,
-        "syntheticFile:",
+    try {
+      setIsEvaluating(true);
+      const payload = await evaluate({
+        activeSegment: activeSegment as "Statistical" | "Schema Check",
+        realFile,
         syntheticFile,
-        "datasetId:",
+        schemaFile,
+        schemaText,
         datasetId,
-      );
+      });
 
-      let schemaPayload = schemaText.trim();
-      if (schemaPayload.length === 0) {
-        if (!schemaFile) {
-          Alert.alert("Missing data", "Please upload a schema file or paste schema JSON.");
-          return;
-        }
-
-        if (Platform.OS === "web") {
-          if (!schemaFile.file) {
-            console.log("Evaluate error", "Missing web schema file", schemaFile);
-            Alert.alert("Evaluation failed", "Invalid schema file selection.");
-            return;
-          }
-          schemaPayload = await schemaFile.file.text();
-        } else {
-          if (!schemaFile.uri) {
-            console.log("Evaluate error", "Missing schema file uri", schemaFile);
-            Alert.alert("Evaluation failed", "Invalid schema file selection.");
-            return;
-          }
-          const schemaUri =
-            schemaFile.uri.startsWith("file://") || schemaFile.uri.startsWith("content://")
-              ? schemaFile.uri
-              : `file://${schemaFile.uri}`;
-          const schemaResponse = await fetch(schemaUri);
-          schemaPayload = await schemaResponse.text();
-        }
-      }
-
-      if (!syntheticFile && datasetId.trim().length === 0) {
-        Alert.alert("Missing data", "Please upload a synthetic dataset or enter dataset ID.");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("data_schema", schemaPayload);
-
-      if (syntheticFile) {
-        if (Platform.OS === "web") {
-          if (!syntheticFile.file) {
-            console.log("Evaluate error", "Missing web synthetic file", syntheticFile);
-            Alert.alert("Evaluation failed", "Invalid synthetic file selection.");
-            return;
-          }
-          formData.append("synthetic_file", syntheticFile.file);
-        } else {
-          if (!syntheticFile.uri || !syntheticFile.name || !syntheticFile.mimeType) {
-            console.log("Evaluate error", "Missing synthetic file metadata", syntheticFile);
-            Alert.alert("Evaluation failed", "Invalid synthetic file selection.");
-            return;
-          }
-          const synthUri =
-            syntheticFile.uri.startsWith("file://") || syntheticFile.uri.startsWith("content://")
-              ? syntheticFile.uri
-              : `file://${syntheticFile.uri}`;
-          formData.append(
-            "synthetic_file",
-            {
-              uri: synthUri,
-              name: syntheticFile.name,
-              type: syntheticFile.mimeType,
-            } as any,
-          );
-        }
+      setEvaluationResult(payload);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (error) {
+      console.log("Evaluate error", error);
+      const message = error instanceof Error ? error.message : "Unable to reach server.";
+      if (
+        message === "Please upload a real dataset." ||
+        message === "Please upload a synthetic dataset or enter dataset ID." ||
+        message === "Please upload a schema file or paste schema JSON."
+      ) {
+        Alert.alert("Missing data", message);
       } else {
-        formData.append("dataset_id", datasetId.trim());
+        Alert.alert("Evaluation failed", message);
       }
-
-      try {
-        setIsEvaluating(true);
-        const response = await fetch(`${baseUrl}/evaluate`, {
-          method: "POST",
-          body: formData,
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          console.log("Evaluate error", payload);
-          Alert.alert("Evaluation failed", payload?.detail ?? "Request failed");
-          return;
-        }
-        setEvaluationResult(payload);
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-      } catch (error) {
-        console.log("Evaluate error", error);
-        Alert.alert("Evaluation failed", "Unable to reach server.");
-      } finally {
-        setIsEvaluating(false);
-      }
+    } finally {
+      setIsEvaluating(false);
     }
   };
 

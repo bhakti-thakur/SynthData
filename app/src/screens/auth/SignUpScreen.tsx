@@ -1,21 +1,55 @@
-import React from "react";
+import React, { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { register } from "../../api/auth";
+import { setAccessToken } from "../../api/tokenStorage";
+import { useAuth } from "../../context/AuthContext";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Input } from "../../components/Input";
 import { Screen } from "../../components/Screen";
-import { AuthStackParamList } from "../../types/navigation";
+import { AuthStackParamList, RootStackParamList } from "../../types/navigation";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 
 type AuthNav = NativeStackNavigationProp<AuthStackParamList>;
+type RootNav = NativeStackNavigationProp<RootStackParamList>;
 
 export function SignUpScreen() {
-  const navigation = useNavigation<AuthNav>();
+  const authNav = useNavigation<AuthNav>();
+  const rootNav = useNavigation<RootNav>();
+  const { setAuthenticated, setUserEmail } = useAuth();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSignUp = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const payload = await register(email.trim(), password);
+      if (payload?.access_token) {
+        const trimmedEmail = email.trim();
+        await setAccessToken(payload.access_token);
+        await setUserEmail(trimmedEmail.length > 0 ? trimmedEmail : null);
+        setAuthenticated(true);
+        rootNav.navigate("MainTabs");
+      }
+      Alert.alert("Success", `Signed up successfully${name.trim() ? `, ${name.trim()}` : ""}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sign up failed";
+      Alert.alert("Sign up failed", message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Screen>
@@ -28,16 +62,28 @@ export function SignUpScreen() {
             <Text style={styles.title}>Sign Up</Text>
 
             <View style={styles.form}>
-              <Input placeholder="Name" />
-              <Input placeholder="Email" keyboardType="email-address" />
+              <Input placeholder="Name" value={name} onChangeText={setName} />
+              <Input
+                placeholder="Email"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
               <Input
                 placeholder="Enter Password"
                 secureTextEntry
                 rightIconName="eye-off"
+                value={password}
+                onChangeText={setPassword}
               />
             </View>
 
-            <Button label="Sign Up" style={styles.primaryButton} />
+            <Button
+              label={isSubmitting ? "Signing up..." : "Sign Up"}
+              style={styles.primaryButton}
+              onPress={handleSignUp}
+              disabled={isSubmitting}
+            />
 
             <Pressable style={styles.rememberRow}>
               <View style={styles.checkbox}>
@@ -51,7 +97,7 @@ export function SignUpScreen() {
               " "}
               <Text
                 style={styles.footerLink}
-                onPress={() => navigation.navigate("Login")}
+                onPress={() => authNav.navigate("Login")}
               >
                 Sign in
               </Text>

@@ -3,11 +3,11 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet } from "react-native";
+import { useAuth } from "../context/AuthContext";
 import { colors } from "../theme/colors";
 import {
   AuthStackParamList,
   MainTabParamList,
-  RootStackParamList,
 } from "../types/navigation";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { SignUpScreen } from "../screens/auth/SignUpScreen";
@@ -15,7 +15,6 @@ import { GeneratorScreen } from "../screens/generator/GeneratorScreen";
 import { EvaluatorScreen } from "../screens/evaluator/EvaluatorScreen";
 import { AccountScreen } from "../screens/account/AccountScreen";
 
-const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
 
@@ -55,15 +54,13 @@ function TabNavigator() {
 }
 
 export function RootNavigator() {
-  return (
-    <RootStack.Navigator
-      initialRouteName="MainTabs"
-      screenOptions={{ headerShown: false }}
-    >
-      <RootStack.Screen name="AuthStack" component={AuthNavigator} />
-      <RootStack.Screen name="MainTabs" component={TabNavigator} />
-    </RootStack.Navigator>
-  );
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
+
+  return isAuthenticated ? <TabNavigator /> : <AuthNavigator />;
 }
 
 const styles = StyleSheet.create({

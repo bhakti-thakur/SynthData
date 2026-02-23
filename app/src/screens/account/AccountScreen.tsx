@@ -1,16 +1,68 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { getHistory, HistoryActivity } from "../../api/history";
+import { API_BASE_URL } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 import { Card } from "../../components/Card";
 import { HistoryCard } from "../../components/HistoryCard";
 import { Screen } from "../../components/Screen";
-import { mockAccount } from "../../data/mockAccount";
-import { mockHistory } from "../../data/mockHistory";
+import { RootStackParamList } from "../../types/navigation";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 
+type RootNav = NativeStackNavigationProp<RootStackParamList>;
+
 export function AccountScreen() {
+  const rootNav = useNavigation<RootNav>();
+  const { logout, userEmail } = useAuth();
+  const [historyItems, setHistoryItems] = useState<HistoryActivity[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const formatTimestamp = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  };
+
+  const handleDownload = async (url: string) => {
+    const resolvedUrl = url.startsWith("/") ? `${API_BASE_URL}${url}` : url;
+    try {
+      await Linking.openURL(resolvedUrl);
+    } catch (error) {
+      console.log("Download error", error);
+    }
+  };
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        setLoadingHistory(true);
+        setHistoryError(null);
+        const response = await getHistory();
+        console.log("History fetched.");
+        // Handle both array and object responses
+        const activities = Array.isArray(response) ? response : (response.activities ?? []);
+        setHistoryItems(activities);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load history";
+        setHistoryError(message);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    loadHistory();
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    rootNav.navigate("AuthStack");
+  };
+
   return (
     <Screen contentStyle={styles.screenContent}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -23,28 +75,39 @@ export function AccountScreen() {
           </View>
 
           <Card style={styles.profileCard}>
-            <Text style={styles.profileText}>{mockAccount.email}</Text>
-            <Text style={styles.profileText}>Profile: {mockAccount.profile}</Text>
-            <Text style={styles.profileText}>{mockAccount.phone}</Text>
+            <Text style={styles.profileText}>{userEmail ?? ""}</Text>
+            <Text style={styles.profileText}>Profile: Student</Text>
           </Card>
 
           <Text style={styles.sectionTitle}>History</Text>
+          {loadingHistory ? <Text style={styles.metaText}>Loading history...</Text> : null}
+          {historyError ? <Text style={styles.metaText}>Error: {historyError}</Text> : null}
           <View style={styles.historyList}>
-            {mockHistory.map((item) => (
-              <HistoryCard
-                key={`${item.id}-${item.timestamp}`}
-                id={item.id}
-                timestamp={item.timestamp}
-                source={item.source}
-                output={item.output}
-              />
-            ))}
+            {historyItems.map((item) => {
+              const downloadUrl = item.download_url ?? undefined;
+              const canDownload = item.activity_type === "generate" && !!downloadUrl;
+              return (
+                <HistoryCard
+                  key={`${item.id}-${item.created_at}`}
+                  id={String(item.id)}
+                  timestamp={formatTimestamp(String(item.created_at))}
+                  source={String(item.activity_type || "Unknown")}
+                  output={String(item.dataset_id || "Generated")}
+                  onDownload={
+                    canDownload && downloadUrl
+                      ? () => handleDownload(downloadUrl)
+                      : undefined
+                  }
+                />
+              );
+            })}
           </View>
 
           <Text style={styles.sectionTitle}>Account Settings</Text>
           <View style={styles.settingsList}>
-            <Text style={styles.settingsItem}>Logout</Text>
-            <Text style={[styles.settingsItem, styles.deleteText]}>Delete Account</Text>
+            <Pressable onPress={handleLogout}>
+              <Text style={[styles.settingsItem, styles.deleteText]}>Logout</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.footerText}>Scroll down to know more about us.</Text>
@@ -151,6 +214,12 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.medium,
     fontSize: typography.size.lg,
     color: colors.textPrimary,
+  },
+  metaText: {
+    marginBottom: spacing.sm,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.size.sm,
+    color: colors.textMuted,
   },
   historyList: {
     gap: spacing.md,

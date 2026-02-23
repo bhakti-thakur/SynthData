@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentPickerAsset } from "expo-document-picker";
-import { Alert, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { generate } from "../../api/content";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { GenerationResultCard } from "../../components/GenerationResultCard";
@@ -57,141 +58,42 @@ export function GeneratorScreen() {
   };
 
   const handleGenerate = async () => {
-    const baseUrl = "http://localhost:8000";
     if (isGenerating) {
       return;
     }
 
-    if (activeSegment === "Model") {
-      const nRows = Number(rows);
-      const batch = Number(batchSize);
-      const epochCount = Number(epochs);
-      if (!modelFile || Number.isNaN(nRows) || Number.isNaN(batch) || Number.isNaN(epochCount)) {
-        Alert.alert("Missing data", "Please select a file and fill in all fields.");
-        return;
-      }
+    try {
+      setIsGenerating(true);
+      const payload = await generate({
+        activeSegment: activeSegment as "Model" | "Schema",
+        modelFile,
+        schemaFile,
+        schemaText,
+        rows,
+        batchSize,
+        epochs,
+        schemaRows,
+      });
 
-      if (!modelFile.uri || !modelFile.name || !modelFile.mimeType) {
-        console.log("Generate error", "Missing file metadata", modelFile);
-        Alert.alert("Generate failed", "Invalid file selection.");
-        return;
-      }
-
-      const fileUri =
-        modelFile.uri.startsWith("file://") || modelFile.uri.startsWith("content://")
-          ? modelFile.uri
-          : `file://${modelFile.uri}`;
-
-      const formData = new FormData();
-      if (Platform.OS === "web") {
-        if (!modelFile.file) {
-          console.log("Generate error", "Missing web file object", modelFile);
-          Alert.alert("Generate failed", "Invalid file selection.");
-          return;
-        }
-        formData.append("file", modelFile.file);
+      setGenerationResult({
+        dataset_id: payload.dataset_id,
+        download_url: payload.download_url,
+      });
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      console.log("Generate success", payload);
+    } catch (error) {
+      console.log("Generate error", error);
+      const message = error instanceof Error ? error.message : "Unable to reach server.";
+      if (
+        message === "Please select a file and fill in all fields." ||
+        message === "Please paste schema JSON and enter rows."
+      ) {
+        Alert.alert("Missing data", message);
       } else {
-        formData.append(
-          "file",
-          {
-            uri: fileUri,
-            name: modelFile.name,
-            type: modelFile.mimeType,
-          } as any,
-        );
+        Alert.alert("Generate failed", message);
       }
-      formData.append("n_rows", String(nRows));
-      formData.append("epochs", String(epochCount));
-      formData.append("batch_size", String(batch));
-      formData.append("apply_constraints", "true");
-
-      try {
-        setIsGenerating(true);
-        const response = await fetch(`${baseUrl}/generate`, {
-          method: "POST",
-          body: formData,
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          console.log("Generate error", payload);
-          Alert.alert("Generate failed", payload?.detail ?? "Request failed");
-          return;
-        }
-        setGenerationResult({
-          dataset_id: payload.dataset_id,
-          download_url: payload.download_url,
-        });
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-        console.log("Generate success", payload);
-      } catch (error) {
-        console.log("Generate error", error);
-        Alert.alert("Generate failed", "Unable to reach server.");
-      } finally {
-        setIsGenerating(false);
-      }
-    } else {
-      const nRows = Number(schemaRows);
-      let schemaPayload = schemaText.trim();
-      if (schemaPayload.length === 0) {
-        if (!schemaFile) {
-          Alert.alert("Missing data", "Please paste schema JSON and enter rows.");
-          return;
-        }
-        if (Platform.OS === "web") {
-          if (!schemaFile.file) {
-            console.log("Generate error", "Missing web schema file", schemaFile);
-            Alert.alert("Generate failed", "Invalid schema file selection.");
-            return;
-          }
-          schemaPayload = await schemaFile.file.text();
-        } else {
-          if (!schemaFile.uri) {
-            console.log("Generate error", "Missing schema file uri", schemaFile);
-            Alert.alert("Generate failed", "Invalid schema file selection.");
-            return;
-          }
-          const schemaUri =
-            schemaFile.uri.startsWith("file://") || schemaFile.uri.startsWith("content://")
-              ? schemaFile.uri
-              : `file://${schemaFile.uri}`;
-          const schemaResponse = await fetch(schemaUri);
-          schemaPayload = await schemaResponse.text();
-        }
-      }
-
-      if (Number.isNaN(nRows)) {
-        Alert.alert("Missing data", "Please paste schema JSON and enter rows.");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("data_schema", schemaPayload);
-      formData.append("n_rows", String(nRows));
-
-      try {
-        setIsGenerating(true);
-        const response = await fetch(`${baseUrl}/generate`, {
-          method: "POST",
-          body: formData,
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          console.log("Generate error", payload);
-          Alert.alert("Generate failed", payload?.detail ?? "Request failed");
-          return;
-        }
-        setGenerationResult({
-          dataset_id: payload.dataset_id,
-          download_url: payload.download_url,
-        });
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-        console.log("Generate success", payload);
-      } catch (error) {
-        console.log("Generate error", error);
-        Alert.alert("Generate failed", "Unable to reach server.");
-      } finally {
-        setIsGenerating(false);
-      }
+    } finally {
+      setIsGenerating(false);
     }
   };
 
