@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
 import { login } from "../../api/auth";
+import { API_BASE_URL } from "../../api/client";
 import { setAccessToken } from "../../api/tokenStorage";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../../components/Button";
@@ -18,13 +21,91 @@ import { typography } from "../../theme/typography";
 type AuthNav = NativeStackNavigationProp<AuthStackParamList>;
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
 
+WebBrowser.maybeCompleteAuthSession();
+
 export function LoginScreen() {
   const authNav = useNavigation<AuthNav>();
   const rootNav = useNavigation<RootNav>();
   const { setAuthenticated, setUserEmail } = useAuth();
+  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useAuthRequest({
+    webClientId: "319943512752-cuft8b33bi2nhpo0m0d4keh57egeum2e.apps.googleusercontent.com",
+  });
+  const googleHandledRef = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+
+  const parseJwtEmail = (token: string): string | null => {
+    const parts = token.split(".");
+    if (parts.length < 2) {
+      return null;
+    }
+
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const decode = typeof globalThis.atob === "function" ? globalThis.atob : null;
+
+    if (!decode) {
+      return null;
+    }
+
+    try {
+      const payload = JSON.parse(decode(padded)) as { email?: string };
+      return typeof payload.email === "string" ? payload.email : null;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const handleGoogleResponse = async () => {
+      if (googleHandledRef.current) {
+        return;
+      }
+
+      if (googleResponse?.type !== "success") {
+        return;
+      }
+
+      googleHandledRef.current = true;
+
+      const idToken = googleResponse.authentication?.idToken ?? null;
+
+      if (!idToken) {
+        Alert.alert("Google sign-in failed", "Missing id token.");
+        return;
+      }
+
+      try {
+        setIsGoogleSubmitting(true);
+        const response = await fetch(`${API_BASE_URL}/auth/google`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id_token: idToken }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.detail ?? "Google login failed");
+        }
+
+        if (payload?.access_token) {
+          await setAccessToken(payload.access_token);
+          await setUserEmail(parseJwtEmail(idToken));
+          setAuthenticated(true);
+          rootNav.navigate("MainTabs");
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Google login failed";
+        Alert.alert("Google sign-in failed", message);
+      } finally {
+        setIsGoogleSubmitting(false);
+      }
+    };
+
+    handleGoogleResponse();
+  }, [googleResponse, rootNav, setAuthenticated, setUserEmail]);
 
   const handleLogin = async () => {
     if (isSubmitting) {
@@ -60,7 +141,17 @@ export function LoginScreen() {
             </Pressable>
             <Text style={styles.title}>Login</Text>
 
-            <Pressable style={styles.googleButton}>
+            <Pressable
+              style={styles.googleButton}
+              disabled={isGoogleSubmitting || !googleRequest}
+              onPress={() => {
+                if (Platform.OS !== "web") {
+                  Alert.alert("Unavailable", "Google sign-in is only available on web.");
+                  return;
+                }
+                void promptGoogleSignIn();
+              }}
+            >
               <Ionicons name="logo-google" size={18} color={colors.textPrimary} />
               <Text style={styles.googleText}>Continue with Google</Text>
             </Pressable>
