@@ -1,6 +1,12 @@
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { Card } from "./Card";
 import { colors } from "../theme/colors";
 import { spacing } from "../theme/spacing";
@@ -18,12 +24,21 @@ export function HistoryCard({
   output,
   onDownload,
 }: HistoryCardProps) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 480;
+
   return (
     <Card style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.titleRow}>
           <Ionicons name="server" size={20} color={colors.textPrimary} />
-          <Text style={styles.title}>{id}</Text>
+          <Text
+            style={[styles.title, isMobile ? styles.titleMobile : styles.titleLarge]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {id}
+          </Text>
         </View>
         {onDownload ? (
           <Pressable onPress={onDownload} style={styles.downloadButton}>
@@ -61,11 +76,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+    flex: 1,
+    minWidth: 0,
   },
   title: {
     fontFamily: typography.fontFamily.medium,
-    fontSize: typography.size.lg,
     color: colors.textPrimary,
+    flex: 1,
+  },
+  titleMobile: {
+    fontSize: typography.size.md,
+  },
+  titleLarge: {
+    fontSize: typography.size.lg,
   },
   downloadButton: {
     width: 32,
@@ -77,8 +100,13 @@ const styles = StyleSheet.create({
   timestamp: {
     marginTop: spacing.sm,
     fontFamily: typography.fontFamily.medium,
-    fontSize: typography.size.sm,
     color: colors.textMuted,
+  },
+  timestampMobile: {
+    fontSize: typography.size.sm,
+  },
+  timestampLarge: {
+    fontSize: typography.size.sm,
   },
   mappingRow: {
     marginTop: spacing.md,
@@ -90,6 +118,7 @@ const styles = StyleSheet.create({
   mappingBlock: {
     flex: 1,
     gap: spacing.xs,
+    minWidth: 0,
   },
   mappingLabel: {
     fontFamily: typography.fontFamily.medium,
